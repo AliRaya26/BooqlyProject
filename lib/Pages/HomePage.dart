@@ -1,3 +1,5 @@
+import 'package:booqly/Pages/LibraryPage.dart';
+import 'package:booqly/Pages/SearchByTitlePage.dart';
 import 'package:booqly/Pages/SignupPage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -161,29 +163,54 @@ class _HomePageState extends State<HomePage> {
   TextStyle get _outfit => GoogleFonts.outfit();
   TextStyle get _cormorant => GoogleFonts.cormorantGaramond();
 
+  Widget _buildPageContent() {
+    switch (_navIndex) {
+      case 0:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TopBar(),
+              _HeroGreeting(cormorant: _cormorant, outfit: _outfit),
+              const _Divider(),
+              _ContinueReadingSection(cormorant: _cormorant, outfit: _outfit),
+              _StreakSection(cormorant: _cormorant, outfit: _outfit),
+              _WantToReadSection(cormorant: _cormorant, outfit: _outfit),
+              _MonthlyStatsSection(outfit: _outfit),
+              // _AddBookSection(outfit: _outfit),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      case 1:
+        return const LibraryPage();
+      case 2:
+        return Center(
+          child: Text(
+            'Explore',
+            style: GoogleFonts.outfit(color: AppColors.textMuted),
+          ),
+        );
+      case 3:
+        return Center(
+          child: Text(
+            'Profile',
+            style: GoogleFonts.outfit(color: AppColors.textMuted),
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 100),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TopBar(),
-                _HeroGreeting(cormorant: _cormorant, outfit: _outfit),
-                const _Divider(),
-                _ContinueReadingSection(cormorant: _cormorant, outfit: _outfit),
-                _StreakSection(cormorant: _cormorant, outfit: _outfit),
-                _WantToReadSection(cormorant: _cormorant, outfit: _outfit),
-                _MonthlyStatsSection(outfit: _outfit),
-                // _AddBookSection(outfit: _outfit),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
+          _buildPageContent(),
           Positioned(
             bottom: 0,
             left: 0,
@@ -236,31 +263,77 @@ void _showAddBottomSheet(BuildContext context) {
               ),
             ),
             const SizedBox(height: 16),
-            ...[
-              ('Search by title', Icons.search_rounded),
-              ('Scan ISBN barcode', Icons.qr_code_scanner_rounded),
-              ('Manual entry', Icons.edit_rounded),
-            ].map(
-              (item) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.goldMuted,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(item.$2, color: AppColors.gold, size: 18),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.goldMuted,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                title: Text(
-                  item.$1,
-                  style: GoogleFonts.outfit(
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                onTap: () => Navigator.pop(context),
+                child: Icon(Icons.search_rounded, color: AppColors.gold, size: 18),
               ),
+              title: Text(
+                'Search by title',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SearchByTitlePage()),
+                );
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.goldMuted,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.qr_code_scanner_rounded, color: AppColors.gold, size: 18),
+              ),
+              title: Text(
+                'Scan ISBN barcode',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Navigate to scan ISBN page
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.goldMuted,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.edit_rounded, color: AppColors.gold, size: 18),
+              ),
+              title: Text(
+                'Manual entry',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Navigate to manual entry page
+              },
             ),
             const SizedBox(height: 8),
           ],
@@ -571,7 +644,8 @@ class _ContinueReadingCard extends StatelessWidget {
   }
 }
 
-// note: will be replaced by the image of the book entered by the user when they add the book or fetched from from database
+// note: will be replaced by the image of the book entered by the user when they add the book or fetched it from the
+// database
 
 class _BookSpine extends StatelessWidget {
   const _BookSpine({required this.book});
@@ -1049,159 +1123,9 @@ class _Bar extends StatelessWidget {
   }
 }
 
-// ─── Add a Book ───────────────────────────────────────────────────────────────
-
-class _AddBookSection extends StatelessWidget {
-  const _AddBookSection({required this.outfit});
-  final TextStyle outfit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-      child: GestureDetector(
-        onTap: () => _showAddBottomSheet(context),
-        child: Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: AppColors.goldMuted,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.goldDim,
-              style: BorderStyle.solid,
-            ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.goldMuted,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.goldDim),
-                ),
-                child: const Icon(Icons.add, color: AppColors.gold, size: 22),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Add a book',
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Search online or add manually',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: ['Search by title', 'Scan ISBN', 'Manual entry']
-                    .map(
-                      (label) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.chipBorder),
-                        ),
-                        child: Text(
-                          label,
-                          style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-//   }
-
-//   void _showAddBottomSheet(BuildContext context) {
-//     showModalBottomSheet(
-//       context: context,
-//       backgroundColor: AppColors.surface,
-//       shape: const RoundedRectangleBorder(
-//         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-//       ),
-//       builder: (_) => Padding(
-//         padding: const EdgeInsets.all(24),
-//         child: Column(
-//           mainAxisSize: MainAxisSize.min,
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             Center(
-//               child: Container(
-//                 width: 36,
-//                 height: 4,
-//                 decoration: BoxDecoration(
-//                   color: AppColors.textMuted,
-//                   borderRadius: BorderRadius.circular(2),
-//                 ),
-//               ),
-//             ),
-//             const SizedBox(height: 20),
-//             Text(
-//               'Add a book',
-//               style: GoogleFonts.cormorantGaramond(
-//                 fontSize: 22,
-//                 fontWeight: FontWeight.w600,
-//                 color: AppColors.textPrimary,
-//               ),
-//             ),
-//             const SizedBox(height: 16),
-//             ...[
-//               ('Search by title', Icons.search_rounded),
-//               ('Scan ISBN barcode', Icons.qr_code_scanner_rounded),
-//               ('Manual entry', Icons.edit_rounded),
-//             ].map(
-//               (item) => ListTile(
-//                 contentPadding: EdgeInsets.zero,
-//                 leading: Container(
-//                   width: 40,
-//                   height: 40,
-//                   decoration: BoxDecoration(
-//                     color: AppColors.goldMuted,
-//                     borderRadius: BorderRadius.circular(10),
-//                   ),
-//                   child: Icon(item.$2, color: AppColors.gold, size: 18),
-//                 ),
-//                 title: Text(
-//                   item.$1,
-//                   style: GoogleFonts.outfit(
-//                     fontSize: 14,
-//                     color: AppColors.textPrimary,
-//                   ),
-//                 ),
-//                 onTap: () => Navigator.pop(context),
-//               ),
-//             ),
-//             const SizedBox(height: 8),
-//           ],
-//         ),
-//       ),
-//     );
-  }
-}
 
 // ─── Bottom Navigation ────────────────────────────────────────────────────────
+// Replace your existing _BottomNav widget with this one
 
 class _BottomNav extends StatelessWidget {
   const _BottomNav({
@@ -1234,6 +1158,7 @@ class _BottomNav extends StatelessWidget {
             selected: selectedIndex,
             onTap: onTap,
           ),
+
           _NavItem(
             icon: Icons.menu_book_rounded,
             label: 'Library',
@@ -1241,7 +1166,9 @@ class _BottomNav extends StatelessWidget {
             selected: selectedIndex,
             onTap: onTap,
           ),
+
           _NavFab(onTap: onAddTap),
+
           _NavItem(
             icon: Icons.explore_rounded,
             label: 'Explore',
