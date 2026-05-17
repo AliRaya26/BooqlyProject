@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /books/{bookId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /app_config/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // One document per user: preferences/{userId}
+    match /preferences/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

@@ -1,6 +1,8 @@
 import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
+import 'package:booqly/services/preferences_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -50,16 +52,12 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
   // Search controller
   final TextEditingController _controller = TextEditingController();
 
-  // Firebase service
   final BookService _bookService = BookService();
+  final PreferencesService _preferencesService = PreferencesService();
 
-  // Search query
   String _query = '';
-
-  // Books list
   List<BookModel> _books = [];
-
-  // Loading
+  List<String> _preferredGenres = [];
   bool _isLoading = true;
 
   // ───────────────────────────────────────────────────────────
@@ -70,8 +68,20 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
   void initState() {
     super.initState();
 
-    // REALTIME FIRESTORE LISTENER
     listenToBooks();
+    _loadUserPreferences();
+  }
+
+  Future<void> _loadUserPreferences() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final prefs = await _preferencesService.getUserPreferences(uid);
+    if (!mounted || prefs == null) return;
+
+    setState(() {
+      _preferredGenres = prefs.preferredGenres;
+    });
   }
 
   // ───────────────────────────────────────────────────────────
@@ -111,13 +121,23 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
       grouped[book.category]!.add(book);
     }
 
-    // Convert map → list
-    return grouped.entries.map((entry) {
+    final categories = grouped.entries.map((entry) {
       return BookCategory(
         name: entry.key,
         books: entry.value,
       );
     }).toList();
+
+    if (_preferredGenres.isEmpty) return categories;
+
+    categories.sort((a, b) {
+      final aPreferred = _preferredGenres.contains(a.name);
+      final bPreferred = _preferredGenres.contains(b.name);
+      if (aPreferred == bPreferred) return a.name.compareTo(b.name);
+      return aPreferred ? -1 : 1;
+    });
+
+    return categories;
   }
 
   @override
@@ -155,10 +175,28 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
                       ? _buildEmptyState()
                       : ListView.builder(
                           padding: const EdgeInsets.only(bottom: 40),
-                          itemCount: _filtered.length,
+                          itemCount: _filtered.length +
+                              (_preferredGenres.isNotEmpty && _query.isEmpty
+                                  ? 1
+                                  : 0),
                           itemBuilder: (_, i) {
+                            if (_preferredGenres.isNotEmpty &&
+                                _query.isEmpty &&
+                                i == 0) {
+                              return _PickedForYouBanner(
+                                genres: _preferredGenres,
+                              );
+                            }
+
+                            final index = _preferredGenres.isNotEmpty &&
+                                    _query.isEmpty
+                                ? i - 1
+                                : i;
+
                             return _CategorySection(
-                              category: _filtered[i],
+                              category: _filtered[index],
+                              isPreferred: _preferredGenres
+                                  .contains(_filtered[index].name),
                             );
                           },
                         ),
@@ -350,12 +388,60 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 // CATEGORY SECTION
 // ─────────────────────────────────────────────────────────────
 
+class _PickedForYouBanner extends StatelessWidget {
+  const _PickedForYouBanner({required this.genres});
+
+  final List<String> genres;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2C2210), Color(0xFF1A1713)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Color(0x33D4A96A)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Picked for you',
+              style: GoogleFonts.cormorantGaramond(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: AppColors.gold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Based on your tastes: ${genres.take(4).join(', ')}${genres.length > 4 ? '…' : ''}',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CategorySection extends StatelessWidget {
   const _CategorySection({
     required this.category,
+    this.isPreferred = false,
   });
 
   final BookCategory category;
+  final bool isPreferred;
 
   @override
   Widget build(BuildContext context) {
@@ -373,14 +459,38 @@ class _CategorySection extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
             children: [
-              Text(
-                category.name,
-
-                style: GoogleFonts.amiko(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              Row(
+                children: [
+                  Text(
+                    category.name,
+                    style: GoogleFonts.amiko(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (isPreferred) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0x1FD4A96A),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Your pick',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          color: AppColors.gold,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
 
               Text(

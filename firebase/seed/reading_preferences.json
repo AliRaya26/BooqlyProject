@@ -1,0 +1,59 @@
+{
+  "genres": [
+    { "id": "Motivation", "label": "Motivation", "emoji": "🔥" },
+    { "id": "Programming", "label": "Programming", "emoji": "💻" },
+    { "id": "Finance", "label": "Finance", "emoji": "📈" },
+    { "id": "Psychology", "label": "Psychology", "emoji": "🧠" },
+    { "id": "Productivity", "label": "Productivity", "emoji": "⚡" },
+    { "id": "Philosophy", "label": "Philosophy", "emoji": "🏛️" },
+    { "id": "Fiction", "label": "Fiction", "emoji": "📖" },
+    { "id": "Science", "label": "Science", "emoji": "🔬" },
+    { "id": "History", "label": "History", "emoji": "🏺" }
+  ],
+  "readingThemes": [
+    {
+      "id": "cozy_dark",
+      "label": "Cozy Dark",
+      "subtitle": "Warm gold on charcoal — the Booqly classic",
+      "emoji": "🌙"
+    },
+    {
+      "id": "sepia_warm",
+      "label": "Sepia Warm",
+      "subtitle": "Paper-like tones for long evening reads",
+      "emoji": "📜"
+    },
+    {
+      "id": "midnight_blue",
+      "label": "Midnight Blue",
+      "subtitle": "Cool, calm contrast for focused sessions",
+      "emoji": "🌌"
+    },
+    {
+      "id": "paper_light",
+      "label": "Paper Light",
+      "subtitle": "Bright pages for daytime reading",
+      "emoji": "☀️"
+    }
+  ],
+  "readingPaces": [
+    {
+      "id": "relaxed",
+      "label": "Relaxed",
+      "subtitle": "About 1–2 books per month",
+      "emoji": "🍃"
+    },
+    {
+      "id": "steady",
+      "label": "Steady",
+      "subtitle": "About 3–5 books per month",
+      "emoji": "📚"
+    },
+    {
+      "id": "avid",
+      "label": "Avid",
+      "subtitle": "6+ books per month",
+      "emoji": "🚀"
+    }
+  ]
+}

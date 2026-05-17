@@ -1,5 +1,5 @@
-import 'package:booqly/Pages/HomePage.dart';
 import 'package:booqly/Pages/LoginPage.dart';
+import 'package:booqly/Pages/ReadingPreferencesPage.dart';
 import 'package:booqly/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,7 +28,6 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController confirmPasswordController =
       TextEditingController();
 
-  // Firebase auth service instance
   final AuthService authService = AuthService();
 
   @override
@@ -127,25 +126,30 @@ class _SignupPageState extends State<SignupPage> {
                       return;
                     }
 
-                    // ── Call Firebase signup ──
-                    final user = await authService.signUp(
+                    final result = await authService.signUp(
                       email: emailController.text.trim(),
                       password: passwordController.text.trim(),
                       firstName: firstNameController.text.trim(),
                       lastName: lastNameController.text.trim(),
                     );
 
-                    // ── If signup successful ──
-                    if (user != null) {
+                    if (!context.mounted) return;
+
+                    if (result.isSuccess) {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const HomePage()),
+                        MaterialPageRoute(
+                          builder: (_) => const ReadingPreferencesPage(),
+                        ),
                       );
-                    }
-                    // ── If signup failed ──
-                    else {
+                    } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Signup failed")),
+                        SnackBar(
+                          content: Text(
+                            result.errorMessage ?? 'Signup failed',
+                          ),
+                          duration: const Duration(seconds: 5),
+                        ),
                       );
                     }
                   },
