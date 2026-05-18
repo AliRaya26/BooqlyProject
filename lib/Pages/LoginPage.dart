@@ -1,6 +1,6 @@
-import 'package:booqly/Pages/HomePage.dart';
 import 'package:booqly/Pages/SignupPage.dart';
 import 'package:booqly/services/auth_service.dart';
+import 'package:booqly/services/preferences_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -25,8 +25,9 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
-  // Firebase service
+  // Firebase services
   final AuthService authService = AuthService();
+  final PreferencesService preferencesService = PreferencesService();
 
   @override
   void dispose() {
@@ -129,27 +130,22 @@ class _LoginPageState extends State<LoginPage> {
                 child: ElevatedButton(
                   onPressed: () async {
 
-                    final user = await authService.signIn(
+                    final result = await authService.signIn(
                       email: emailController.text.trim(),
                       password: passwordController.text.trim(),
                     );
 
-                    if (user != null) {
+                    if (!context.mounted) return;
 
-                      // SUCCESS → go to HomePage
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const HomePage(),
-                        ),
-                      );
-
+                    if (result.isSuccess) {
+                      await preferencesService.navigateAfterLogin(context);
                     } else {
-
-                      // ERROR
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Invalid email or password"),
+                        SnackBar(
+                          content: Text(
+                            result.errorMessage ?? 'Invalid email or password',
+                          ),
+                          duration: const Duration(seconds: 5),
                         ),
                       );
                     }

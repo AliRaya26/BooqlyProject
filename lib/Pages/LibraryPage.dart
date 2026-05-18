@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:booqly/models/book_model.dart';
+import 'package:booqly/services/library_service.dart';
+import 'package:booqly/services/preferences_service.dart';
 
 class AppColors {
   static const bg = Color(0xFF0E0C0A);
@@ -62,9 +64,10 @@ class _LibraryPageState extends State<LibraryPage>
   // TAB CONTROLLER
   late final TabController _tabController;
 
-  // FIREBASE
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final PreferencesService _preferencesService = PreferencesService();
+  final LibraryService _libraryService = LibraryService();
 
   // CATEGORY FILTER
   int _selectedCategory = 0;
@@ -72,10 +75,12 @@ class _LibraryPageState extends State<LibraryPage>
   // LOADING
   bool _isLoading = true;
 
-  // BOOK LISTS
   List<BookModel> _readingBooks = [];
   List<BookModel> _wantToReadBooks = [];
   List<BookModel> _completedBooks = [];
+  List<BookModel> _suggestedBooks = [];
+  List<String> _preferredGenres = [];
+  bool _loadingSuggestions = true;
 
   // SELECTED BOOKS
   Set<String> selectedBooks = {};
@@ -200,10 +205,60 @@ class _LibraryPageState extends State<LibraryPage>
             _readingBooks = readingTemp;
             _wantToReadBooks = wantTemp;
             _completedBooks = completedTemp;
-
             _isLoading = false;
           });
+
+          _refreshSuggestions();
         });
+  }
+
+  Set<String> get _libraryBookIds => {
+        ..._readingBooks.map((b) => b.id),
+        ..._wantToReadBooks.map((b) => b.id),
+        ..._completedBooks.map((b) => b.id),
+      };
+
+  Future<void> _refreshSuggestions() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _suggestedBooks = [];
+          _preferredGenres = [];
+          _loadingSuggestions = false;
+        });
+      }
+      return;
+    }
+
+    final prefs = await _preferencesService.getUserPreferences(user.uid);
+    final genres = prefs?.preferredGenres ?? [];
+
+    final suggested = await _preferencesService.getSuggestedBooks(
+      uid: user.uid,
+      libraryBookIds: _libraryBookIds,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _preferredGenres = genres;
+      _suggestedBooks = suggested;
+      _loadingSuggestions = false;
+    });
+  }
+
+  Future<void> _addSuggestedBook(BookModel book) async {
+    await _libraryService.addBook(
+      bookId: book.id,
+      status: 'want_to_read',
+      totalPages: book.totalPages,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${book.title} added to Want to read')),
+    );
+    _refreshSuggestions();
   }
 
   // ───────────────────────────────────────────────────────────
@@ -309,6 +364,7 @@ class _LibraryPageState extends State<LibraryPage>
           children: [
             _buildTopBar(),
             _buildTabBar(),
+            if (_preferredGenres.isNotEmpty) _buildSuggestedSection(),
             _buildCategoryChips(),
 
             Expanded(child: _buildGrid()),
@@ -391,6 +447,84 @@ class _LibraryPageState extends State<LibraryPage>
           Tab(text: 'Completed'),
         ],
       ),
+    );
+  }
+
+  Widget _buildSuggestedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Suggested for you',
+                style: GoogleFonts.cormorantGaramond(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _loadingSuggestions
+                    ? 'Loading picks…'
+                    : 'Based on ${_preferredGenres.take(3).join(', ')}${_preferredGenres.length > 3 ? '…' : ''}',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 188,
+          child: _loadingSuggestions
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.gold),
+                )
+              : _suggestedBooks.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        child: Text(
+                          'No new suggestions — explore Search to add books in your favorite genres.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      itemCount: _suggestedBooks.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 14),
+                      itemBuilder: (_, i) {
+                        final book = _suggestedBooks[i];
+                        return _SuggestedBookCard(
+                          book: book,
+                          onOpen: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BookDetailPage(book: book),
+                              ),
+                            );
+                          },
+                          onAdd: () => _addSuggestedBook(book),
+                        );
+                      },
+                    ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -560,6 +694,94 @@ class _LibraryPageState extends State<LibraryPage>
             style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMuted),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SuggestedBookCard extends StatelessWidget {
+  const _SuggestedBookCard({
+    required this.book,
+    required this.onOpen,
+    required this.onAdd,
+  });
+
+  final BookModel book;
+  final VoidCallback onOpen;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onOpen,
+      child: SizedBox(
+        width: 108,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        book.coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.surface,
+                          child: const Icon(
+                            Icons.menu_book_rounded,
+                            color: Colors.white54,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: onAdd,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppColors.gold,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          size: 16,
+                          color: AppColors.bg,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              book.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            Text(
+              book.category,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                color: AppColors.gold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
