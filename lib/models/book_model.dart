@@ -8,8 +8,8 @@ class BookModel {
   final String pdfUrl;
   final int totalPages;
 
-  // NEW
   double progress;
+  int currentPage; 
 
   BookModel({
     required this.id,
@@ -20,14 +20,9 @@ class BookModel {
     required this.coverUrl,
     required this.pdfUrl,
     required this.totalPages,
-
-    // NEW
     this.progress = 0.0,
+    this.currentPage = 0,
   });
-
-  // ─────────────────────────────
-  // FIRESTORE → MODEL
-  // ─────────────────────────────
 
   factory BookModel.fromMap(
     Map<String, dynamic> map,
@@ -43,14 +38,10 @@ class BookModel {
       pdfUrl: map['pdfUrl'] ?? '',
       totalPages: map['totalPages'] ?? 0,
 
-      // NEW
       progress: (map['progress'] ?? 0).toDouble(),
+      currentPage: map['currentPage'] ?? 0, // ✅ ADD THIS
     );
   }
-
-  // ─────────────────────────────
-  // MODEL → FIRESTORE
-  // ─────────────────────────────
 
   Map<String, dynamic> toMap() {
     return {
@@ -61,26 +52,26 @@ class BookModel {
       'coverUrl': coverUrl,
       'pdfUrl': pdfUrl,
       'totalPages': totalPages,
-
-      // NEW
       'progress': progress,
+      'currentPage': currentPage, // ✅ ADD THIS
     };
   }
 
   BookModel copyWith({
-  double? progress,
-}) {
-  return BookModel(
-    id: id,
-    title: title,
-    author: author,
-    category: category,
-    description: description,
-    coverUrl: coverUrl,
-    pdfUrl: pdfUrl,
-    totalPages: totalPages,
-    progress: progress ?? this.progress,
-  );
+    double? progress,
+    int? currentPage,
+  }) {
+    return BookModel(
+      id: id,
+      title: title,
+      author: author,
+      description: description,
+      category: category,
+      coverUrl: coverUrl,
+      pdfUrl: pdfUrl,
+      totalPages: totalPages,
+      progress: progress ?? this.progress,
+      currentPage: currentPage ?? this.currentPage,
+    );
+  }
 }
-}
-

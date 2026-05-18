@@ -11,39 +11,35 @@ class LibraryService {
   // ADD BOOK TO USER LIBRARY
   // ─────────────────────────────────────────────
   Future<void> addBook({
+  required String bookId,
+  required String status,
+  required int totalPages,
+}) async {
 
-    required String bookId,
-    required String status,
-    required int totalPages,
+  final user = _auth.currentUser;
+  if (user == null) return;
 
-  }) async {
+  await _firestore
+      .collection('users')
+      .doc(user.uid)
+      .collection('library')
+      .doc(bookId)
+      .set({
 
-    // Current logged user
-    final user = _auth.currentUser;
+    'status': status,
 
-    // Stop if user not logged in
-    if (user == null) return;
+    'currentPage': 0,
+    'totalPages': totalPages,
 
-    // Save inside:
-    // users -> uid -> library -> bookId
-    await _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('library')
-        .doc(bookId)
-        .set({
+    // ✅ ADD THIS
+    'progress': 0.0,
 
-      // reading / want_to_read / completed
-      'status': status,
+    // ✅ VERY IMPORTANT FOR HOME PAGE
+    'lastReadAt': Timestamp.now(),
 
-      // Reading progress
-      'currentPage': 0,
-      'totalPages': totalPages,
-
-      // Save time
-      'addedAt': Timestamp.now(),
-    });
-  }
+    'addedAt': Timestamp.now(),
+  });
+}
 
   // ─────────────────────────────────────────────
   // GET USER LIBRARY
