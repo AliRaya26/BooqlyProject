@@ -20,7 +20,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-
   // ── Controllers (store user input) ──
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
@@ -48,7 +47,6 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               const SizedBox(height: 48),
 
               // ── Title ──
@@ -80,7 +78,10 @@ class _LoginPageState extends State<LoginPage> {
                 style: GoogleFonts.outfit(color: _ink),
                 decoration: InputDecoration(
                   hintText: 'Email address',
-                  prefixIcon: const Icon(Icons.mail_outline_rounded, color: _muted),
+                  prefixIcon: const Icon(
+                    Icons.mail_outline_rounded,
+                    color: _muted,
+                  ),
                   filled: true,
                   fillColor: _surf,
                   border: OutlineInputBorder(
@@ -99,7 +100,10 @@ class _LoginPageState extends State<LoginPage> {
                 style: GoogleFonts.outfit(color: _ink),
                 decoration: InputDecoration(
                   hintText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: _muted),
+                  prefixIcon: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: _muted,
+                  ),
                   filled: true,
                   fillColor: _surf,
                   border: OutlineInputBorder(
@@ -115,10 +119,7 @@ class _LoginPageState extends State<LoginPage> {
                 alignment: Alignment.centerRight,
                 child: Text(
                   'Forgot password?',
-                  style: GoogleFonts.outfit(
-                    fontSize: 14,
-                    color: _gold,
-                  ),
+                  style: GoogleFonts.outfit(fontSize: 14, color: _gold),
                 ),
               ),
 
@@ -129,7 +130,6 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-
                     final result = await authService.signIn(
                       email: emailController.text.trim(),
                       password: passwordController.text.trim(),
@@ -172,16 +172,50 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 20),
 
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await authService.signInWithGoogle();
+
+                    if (!context.mounted) return;
+
+                    if (result.isSuccess) {
+                      await preferencesService.navigateAfterLogin(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            result.errorMessage ?? 'Google sign-in failed',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.g_mobiledata, color: _gold),
+                  label: Text(
+                    'Continue with Google',
+                    style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: _gold),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+              
               // ── Divider ──
               Row(
                 children: [
                   const Expanded(child: Divider(color: Color(0xFF2A2520))),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'or',
-                      style: GoogleFonts.outfit(color: _muted),
-                    ),
+                    child: Text('or', style: GoogleFonts.outfit(color: _muted)),
                   ),
                   const Expanded(child: Divider(color: Color(0xFF2A2520))),
                 ],
@@ -218,5 +252,5 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-  } 
+  }
 }

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthResult {
   final User? user;
@@ -24,8 +25,9 @@ class AuthService {
           'This email is already registered. Try signing in.',
         'weak-password' => 'Password must be at least 6 characters.',
         'invalid-email' => 'Please enter a valid email address.',
-        'user-not-found' || 'wrong-password' || 'invalid-credential' =>
-          'Invalid email or password.',
+        'user-not-found' ||
+        'wrong-password' ||
+        'invalid-credential' => 'Invalid email or password.',
         _ => e.message ?? 'Authentication failed.',
       };
     }
@@ -114,5 +116,51 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
+  }
+
+  Future<AuthResult> signInWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+
+      // 🔴 FORCE logout from previous session
+      await googleSignIn.signOut();
+      await _auth.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        return const AuthResult(errorMessage: 'Google sign-in cancelled.');
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final result = await _auth.signInWithCredential(credential);
+      final user = result.user;
+
+      if (user == null) {
+        return const AuthResult(errorMessage: 'Google sign-in failed.');
+      }
+
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+
+      if (!doc.exists) {
+        await _createUserDocument(
+          uid: user.uid,
+          email: user.email ?? '',
+          firstName: user.displayName?.split(' ').first ?? 'User',
+          lastName: '',
+        );
+      }
+
+      return AuthResult(user: user);
+    } catch (e) {
+      return AuthResult(errorMessage: _mapError(e));
+    }
   }
 }

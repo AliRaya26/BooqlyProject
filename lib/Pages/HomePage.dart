@@ -71,15 +71,7 @@ class WeekDay {
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
-const weekDays = [
-  WeekDay('Mo', DayStatus.done),
-  WeekDay('Tu', DayStatus.done),
-  WeekDay('We', DayStatus.done),
-  WeekDay('Th', DayStatus.done),
-  WeekDay('Fr', DayStatus.today),
-  WeekDay('Sa', DayStatus.upcoming),
-  WeekDay('Su', DayStatus.upcoming),
-];
+List<WeekDay> streakWeek = [];
 
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
@@ -134,6 +126,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _listenToContinueReading(); // ← stream instead of one-time fetch
     _listenToWantToRead(); // ← stream for want-to-read list as well
+    _listenToStreak(); // ← load streak once on init (can be refreshed manually if needed)
   }
 
   @override
@@ -141,6 +134,7 @@ class _HomePageState extends State<HomePage> {
     _librarySubscription?.cancel();
     _wantToReadSub?.cancel();
     super.dispose();
+    _streakSub?.cancel();
   }
 
   void _listenToContinueReading() {
@@ -227,6 +221,76 @@ class _HomePageState extends State<HomePage> {
         });
   }
 
+  List<WeekDay> _buildWeekDays(List<Timestamp> timestamps) {
+    final now = DateTime.now();
+
+    // start of week (Monday)
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+
+    // convert timestamps to readable days
+    final readDays = timestamps.map((t) {
+      final d = t.toDate();
+      return DateTime(d.year, d.month, d.day);
+    }).toSet();
+
+    List<WeekDay> result = [];
+
+    final labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+    for (int i = 0; i < 7; i++) {
+      final dayDate = DateTime(monday.year, monday.month, monday.day + i);
+
+      final normalized = DateTime(dayDate.year, dayDate.month, dayDate.day);
+
+      DayStatus status;
+
+      if (normalized.isAfter(DateTime(now.year, now.month, now.day))) {
+        status = DayStatus.upcoming;
+      } else if (readDays.contains(normalized)) {
+        status = DayStatus.done;
+      } else if (normalized.day == now.day &&
+          normalized.month == now.month &&
+          normalized.year == now.year) {
+        status = DayStatus.today;
+      } else {
+        status = DayStatus.upcoming;
+      }
+
+      result.add(WeekDay(labels[i], status));
+    }
+
+    return result;
+  }
+
+  StreamSubscription? _streakSub;
+
+  void _listenToStreak() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _streakSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('library')
+        .snapshots()
+        .listen((snapshot) {
+          List<Timestamp> timestamps = [];
+
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            if (data['lastReadAt'] != null) {
+              timestamps.add(data['lastReadAt']);
+            }
+          }
+
+          if (!mounted) return;
+
+          setState(() {
+            streakWeek = _buildWeekDays(timestamps);
+          });
+        });
+  }
+
   List<BookModel> wantToReadBooks = [];
   bool isLoadingWantToRead = true;
   StreamSubscription? _wantToReadSub;
@@ -246,9 +310,7 @@ class _HomePageState extends State<HomePage> {
         .where('status', isEqualTo: 'want_to_read')
         .snapshots()
         .listen((snapshot) async {
-          final List<BookModel> loaded = [];
-
-          for (final doc in snapshot.docs) {
+          final futures = snapshot.docs.map((doc) async {
             final bookId = doc.id;
             final libraryData = doc.data();
 
@@ -257,25 +319,26 @@ class _HomePageState extends State<HomePage> {
                 .doc(bookId)
                 .get();
 
-            if (!bookDoc.exists) continue;
+            if (!bookDoc.exists) return null;
 
             final bookData = bookDoc.data()!;
 
-            loaded.add(
-              BookModel(
-                id: bookDoc.id,
-                title: bookData['title'] ?? '',
-                author: bookData['author'] ?? '',
-                description: bookData['description'] ?? '',
-                category: bookData['category'] ?? '',
-                coverUrl: bookData['coverUrl'] ?? '',
-                pdfUrl: bookData['pdfUrl'] ?? '',
-                totalPages: bookData['totalPages'] ?? 0,
-                progress: (libraryData['progress'] ?? 0).toDouble(),
-                currentPage: libraryData['currentPage'] ?? 0,
-              ),
+            return BookModel(
+              id: bookDoc.id,
+              title: bookData['title'] ?? '',
+              author: bookData['author'] ?? '',
+              description: bookData['description'] ?? '',
+              category: bookData['category'] ?? '',
+              coverUrl: bookData['coverUrl'] ?? '',
+              pdfUrl: bookData['pdfUrl'] ?? '',
+              totalPages: bookData['totalPages'] ?? 0,
+              progress: (libraryData['progress'] ?? 0).toDouble().clamp(0.0, 1.0),
+              currentPage: libraryData['currentPage'] ?? 0,
             );
-          }
+          });
+
+          final results = await Future.wait(futures);
+          final loaded = results.whereType<BookModel>().toList();
 
           if (mounted) {
             setState(() {
@@ -389,12 +452,6 @@ class _HomePageState extends State<HomePage> {
   // ─── Page switcher ───────────────────────────────────────────────────────
 
   Widget _buildPageContent() {
-    _WantToReadSection(
-      books: wantToReadBooks,
-      isLoading: isLoadingWantToRead,
-      cormorant: _cormorant,
-      outfit: _outfit,
-    );
     switch (_navIndex) {
       case 0:
         return SingleChildScrollView(
@@ -405,7 +462,6 @@ class _HomePageState extends State<HomePage> {
               _TopBar(),
               _HeroGreeting(cormorant: _cormorant, outfit: _outfit),
               const _Divider(),
-              // ✅ onRefresh passed so card can re-fetch after navigation
               _ContinueReadingSection(
                 cormorant: _cormorant,
                 outfit: _outfit,
@@ -425,22 +481,16 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         );
+
       case 1:
         return const LibraryPage();
+
       case 2:
-        return Center(
-          child: Text(
-            'Explore',
-            style: GoogleFonts.outfit(color: AppColors.textMuted),
-          ),
-        );
+        return const Center(child: Text("Explore"));
+
       case 3:
-        return Center(
-          child: Text(
-            'Profile',
-            style: GoogleFonts.outfit(color: AppColors.textMuted),
-          ),
-        );
+        return const Center(child: Text("Profile"));
+
       default:
         return const SizedBox.shrink();
     }
@@ -1062,7 +1112,7 @@ class _StreakSection extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: weekDays.map((d) => _DayDot(day: d)).toList(),
+                  children: streakWeek.map((d) => _DayDot(day: d)).toList(),
                 ),
               ],
             ),
