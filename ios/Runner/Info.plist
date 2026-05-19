@@ -66,17 +66,20 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-
 	<key>CFBundleURLTypes</key>
-	
 	<array>
-	<dict>
-		<key>CFBundleURLSchemes</key>
-		<array>
-		<string>com.googleusercontent.apps.com.googleusercontent.apps.87414724762-i1oinjvq1l5dbto337tecen9b9jfv0j6</string>
-		</array>
-	</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.com.googleusercontent.apps.87414724762-i1oinjvq1l5dbto337tecen9b9jfv0j6</string>
+			</array>
+		</dict>
 	</array>
-
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Booqly uses photos so the assistant can identify books from pictures you send.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

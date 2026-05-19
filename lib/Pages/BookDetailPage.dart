@@ -1,6 +1,5 @@
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:booqly/models/book_model.dart';
-import 'package:booqly/services/user_book_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:booqly/services/library_service.dart';
@@ -41,11 +40,6 @@ final LibraryService _libraryService = LibraryService();
 bool _statusLoading = true;
 
 class _BookDetailPageState extends State<BookDetailPage> {
-  // Services
-  final UserBookService _userBookService = UserBookService();
-
-  // Loading states
-  bool _isLoading = false;
   // CURRENT BOOK STATUS
   String? _bookStatus;
   bool _isFavorite = false;
@@ -56,21 +50,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   // Current page reached
   int _currentPage = 0;
-
-  Stream<DocumentSnapshot> getBookStream() {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      throw Exception("User not logged in");
-    }
-
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('library')
-        .doc(widget.book.id)
-        .snapshots();
-  }
 
   Future<void> loadBookStatus() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -240,6 +219,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
           "completedAt": Timestamp.now(),
         }, SetOptions(merge: true));
 
+    if (!mounted) return;
+
     // Update local UI
     setState(() {
       _currentPage = widget.book.totalPages;
@@ -248,7 +229,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     // Beautiful popup
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.75),
+      barrierColor: Colors.black.withValues(alpha: 0.75),
 
       builder: (_) {
         return Dialog(
@@ -274,7 +255,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.gold.withOpacity(0.15),
+                    color: AppColors.gold.withValues(alpha: 0.15),
                   ),
 
                   child: const Icon(
@@ -321,7 +302,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   padding: const EdgeInsets.all(18),
 
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.03),
+                    color: Colors.white.withValues(alpha: 0.03),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -424,848 +405,790 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  // ───────────────────────────────────────────────────────────
-  // ADD BOOK TO LIBRARY
-  // ───────────────────────────────────────────────────────────
-
-  Future<void> addToLibrary() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    await _userBookService.addBookToLibrary(
-      bookId: widget.book.id,
-      title: widget.book.title,
-      author: widget.book.author,
-      coverUrl: widget.book.coverUrl,
-      totalPages: widget.book.totalPages,
-    );
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Book added to your library')));
-  }
-
   @override
   Widget build(BuildContext context) {
     // LOADING
-    return StreamBuilder<DocumentSnapshot>(
-      stream: getBookStream(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            backgroundColor: AppColors.bg,
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.gold),
-            ),
-          );
-        }
+    if (_statusLoading || _loadingProgress) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(child: CircularProgressIndicator(color: AppColors.gold)),
+      );
+    }
 
-        // 1. GET DATA FROM FIRESTORE
-        final data = snapshot.data!.data() as Map<String, dynamic>?;
+    final progressPercent = ((_currentPage / widget.book.totalPages) * 100)
+        .round();
 
-        _bookStatus = data?['status'];
-        _currentPage = data?['currentPage'] ?? 0;
+    return Scaffold(
+      backgroundColor: AppColors.bg,
 
-        // 2. PUT IT HERE (CORRECT PLACE)
-        final progressPercent = widget.book.totalPages == 0
-            ? 0
-            : ((_currentPage / widget.book.totalPages) * 100).round();
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
 
-        // 3. USE IT IN YOUR UI
-        return Scaffold(
-          backgroundColor: AppColors.bg,
-
-          body: SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-
+            children: [
+              // ─────────────────────────────────────────────
+              // TOP IMAGE SECTION
+              // ─────────────────────────────────────────────
+              Stack(
                 children: [
-                  // ─────────────────────────────────────────────
-                  // TOP IMAGE SECTION
-                  // ─────────────────────────────────────────────
-                  Stack(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        height: 420,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 420,
 
-                        child: Image.network(
-                          widget.book.coverUrl,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-
-                      Container(
-                        width: double.infinity,
-                        height: 420,
-                        color: Colors.black.withOpacity(0.35),
-                      ),
-
-                      Positioned(
-                        top: 18,
-                        left: 18,
-
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-
-                          child: Container(
-                            width: 38,
-                            height: 38,
-
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.45),
-                              shape: BoxShape.circle,
-                            ),
-
-                            child: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    child: Image.network(
+                      widget.book.coverUrl,
+                      fit: BoxFit.cover,
+                    ),
                   ),
 
-                  // ─────────────────────────────────────────────
-                  // CONTENT
-                  // ─────────────────────────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.all(24),
+                  Container(
+                    width: double.infinity,
+                    height: 420,
+                    color: Colors.black.withValues(alpha: 0.35),
+                  ),
 
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Positioned(
+                    top: 18,
+                    left: 18,
 
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+
+                      child: Container(
+                        width: 38,
+                        height: 38,
+
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ─────────────────────────────────────────────
+              // CONTENT
+              // ─────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.all(24),
+
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                  children: [
+                    // Category
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border),
+                      ),
+
+                      child: Text(
+                        widget.book.category,
+
+                        style: GoogleFonts.outfit(
+                          color: AppColors.gold,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Title
+                    Text(
+                      widget.book.title,
+
+                      style: GoogleFonts.cormorantGaramond(
+                        fontSize: 40,
+                        height: 1.1,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Author
+                    Text(
+                      'by ${widget.book.author}',
+
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // INFO CARDS
+                    Row(
                       children: [
-                        // Category
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.border),
-                          ),
-
-                          child: Text(
-                            widget.book.category,
-
-                            style: GoogleFonts.outfit(
-                              color: AppColors.gold,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        Expanded(
+                          child: _InfoCard(
+                            title: 'Pages',
+                            value: '${widget.book.totalPages}',
+                            icon: Icons.menu_book_rounded,
                           ),
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(width: 12),
 
-                        // Title
-                        Text(
-                          widget.book.title,
-
-                          style: GoogleFonts.cormorantGaramond(
-                            fontSize: 40,
-                            height: 1.1,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                            fontStyle: FontStyle.italic,
+                        Expanded(
+                          child: _InfoCard(
+                            title: 'Category',
+                            value: widget.book.category,
+                            icon: Icons.category_rounded,
                           ),
                         ),
+                      ],
+                    ),
 
-                        const SizedBox(height: 10),
+                    const SizedBox(height: 32),
 
-                        // Author
-                        Text(
-                          'by ${widget.book.author}',
+                    // About title
+                    Text(
+                      'About this book',
 
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
 
-                        const SizedBox(height: 28),
+                    const SizedBox(height: 14),
 
-                        // INFO CARDS
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _InfoCard(
-                                title: 'Pages',
-                                value: '${widget.book.totalPages}',
-                                icon: Icons.menu_book_rounded,
-                              ),
-                            ),
+                    // Description
+                    Text(
+                      widget.book.description,
 
-                            const SizedBox(width: 12),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        height: 1.8,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
 
-                            Expanded(
-                              child: _InfoCard(
-                                title: 'Category',
-                                value: widget.book.category,
-                                icon: Icons.category_rounded,
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 40),
 
-                        const SizedBox(height: 32),
+                    // ─────────────────────────────────────
+                    // READING PROGRESS SECTION
+                    // ─────────────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(20),
 
-                        // About title
-                        Text(
-                          'About this book',
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                      ),
 
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
-                        const SizedBox(height: 14),
-
-                        // Description
-                        Text(
-                          widget.book.description,
-
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            height: 1.8,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-
-                        const SizedBox(height: 40),
-
-                        // ─────────────────────────────────────
-                        // READING PROGRESS SECTION
-                        // ─────────────────────────────────────
-                        Container(
-                          padding: const EdgeInsets.all(20),
-
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: AppColors.border),
-                          ),
-
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.auto_stories_rounded,
-                                    color: AppColors.gold,
-                                    size: 22,
-                                  ),
-
-                                  const SizedBox(width: 10),
-
-                                  Text(
-                                    "Reading Progress",
-
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ],
+                              const Icon(
+                                Icons.auto_stories_rounded,
+                                color: AppColors.gold,
+                                size: 22,
                               ),
 
-                              const SizedBox(height: 22),
+                              const SizedBox(width: 10),
 
-                              // Current page
-                              Center(
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      "$_currentPage",
+                              Text(
+                                "Reading Progress",
 
-                                      style: GoogleFonts.cormorantGaramond(
-                                        fontSize: 58,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.gold,
-                                      ),
-                                    ),
-
-                                    Text(
-                                      "Current Page",
-
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 13,
-                                        color: AppColors.textMuted,
-                                      ),
-                                    ),
-                                  ],
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
                                 ),
-                              ),
-
-                              const SizedBox(height: 22),
-
-                              // Percentage
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-
-                                children: [
-                                  Text(
-                                    "0",
-
-                                    style: GoogleFonts.outfit(
-                                      color: AppColors.textMuted,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-
-                                  Text(
-                                    "$progressPercent% completed",
-
-                                    style: GoogleFonts.outfit(
-                                      color: AppColors.gold,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-
-                                  Text(
-                                    "${widget.book.totalPages}",
-
-                                    style: GoogleFonts.outfit(
-                                      color: AppColors.textMuted,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 10),
-
-                              // Slider
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  activeTrackColor: AppColors.gold,
-                                  inactiveTrackColor: Colors.white12,
-                                  thumbColor: AppColors.gold,
-                                  overlayColor: AppColors.gold.withOpacity(0.2),
-                                  trackHeight: 4,
-                                ),
-
-                                child: Slider(
-                                  value: _currentPage.toDouble(),
-                                  min: 0,
-                                  max: widget.book.totalPages.toDouble(),
-
-                                  onChanged: (value) async {
-                                    setState(() {
-                                      _currentPage = value.round();
-                                    });
-
-                                    await saveProgress();
-                                  },
-                                ),
-                              ),
-
-                              const SizedBox(height: 20),
-
-                              // Buttons
-                              Row(
-                                children: [
-                                  // Minus
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () async {
-                                        if (_currentPage > 0) {
-                                          setState(() {
-                                            _currentPage--;
-                                          });
-
-                                          await saveProgress();
-                                        }
-                                      },
-
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.04),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: AppColors.border,
-                                          ),
-                                        ),
-
-                                        child: const Icon(
-                                          Icons.remove_rounded,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 12),
-
-                                  // Read next page
-                                  Expanded(
-                                    flex: 2,
-
-                                    child: GestureDetector(
-                                      onTap: () async {
-                                        if (_currentPage <
-                                            widget.book.totalPages) {
-                                          setState(() {
-                                            _currentPage++;
-                                          });
-
-                                          await saveProgress();
-                                        }
-                                      },
-
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-
-                                        decoration: BoxDecoration(
-                                          color: AppColors.gold,
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-
-                                        child: Center(
-                                          child: Text(
-                                            "Read Next Page",
-
-                                            style: GoogleFonts.outfit(
-                                              color: Colors.black,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 12),
-
-                                  // Plus
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () async {
-                                        if (_currentPage <
-                                            widget.book.totalPages) {
-                                          setState(() {
-                                            _currentPage++;
-                                          });
-
-                                          await saveProgress();
-                                        }
-                                      },
-
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.04),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: AppColors.border,
-                                          ),
-                                        ),
-
-                                        child: const Icon(
-                                          Icons.add_rounded,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
+
+                          const SizedBox(height: 22),
+
+                          // Current page
+                          Center(
+                            child: Column(
+                              children: [
+                                Text(
+                                  "$_currentPage",
+
+                                  style: GoogleFonts.cormorantGaramond(
+                                    fontSize: 58,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.gold,
+                                  ),
+                                ),
+
+                                Text(
+                                  "Current Page",
+
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          // Percentage
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                            children: [
+                              Text(
+                                "0",
+
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+
+                              Text(
+                                "$progressPercent% completed",
+
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.gold,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+
+                              Text(
+                                "${widget.book.totalPages}",
+
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Slider
+                          SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: AppColors.gold,
+                              inactiveTrackColor: Colors.white12,
+                              thumbColor: AppColors.gold,
+                              overlayColor: AppColors.gold.withValues(alpha: 0.2),
+                              trackHeight: 4,
+                            ),
+
+                            child: Slider(
+                              value: _currentPage.toDouble(),
+                              min: 0,
+                              max: widget.book.totalPages.toDouble(),
+
+                              onChanged: (value) async {
+                                setState(() {
+                                  _currentPage = value.round();
+                                });
+
+                                await saveProgress();
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Buttons
+                          Row(
+                            children: [
+                              // Minus
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    if (_currentPage > 0) {
+                                      setState(() {
+                                        _currentPage--;
+                                      });
+
+                                      await saveProgress();
+                                    }
+                                  },
+
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.04),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: AppColors.border,
+                                      ),
+                                    ),
+
+                                    child: const Icon(
+                                      Icons.remove_rounded,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              // Read next page
+                              Expanded(
+                                flex: 2,
+
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    if (_currentPage < widget.book.totalPages) {
+                                      setState(() {
+                                        _currentPage++;
+                                      });
+
+                                      await saveProgress();
+                                    }
+                                  },
+
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+
+                                    decoration: BoxDecoration(
+                                      color: AppColors.gold,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+
+                                    child: Center(
+                                      child: Text(
+                                        "Read Next Page",
+
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              // Plus
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    if (_currentPage < widget.book.totalPages) {
+                                      setState(() {
+                                        _currentPage++;
+                                      });
+
+                                      await saveProgress();
+                                    }
+                                  },
+
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.04),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: AppColors.border,
+                                      ),
+                                    ),
+
+                                    child: const Icon(
+                                      Icons.add_rounded,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // START READING BUTTON
+                    SizedBox(
+                      width: double.infinity,
+
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final user = FirebaseAuth.instance.currentUser;
+
+                          if (user == null) return;
+
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .collection('library')
+                              .doc(widget.book.id)
+                              .set({
+                                "status": "reading",
+                                "progress":
+                                    _currentPage / widget.book.totalPages,
+                                "currentPage": _currentPage,
+                                "totalPages": widget.book.totalPages,
+                                "addedAt": Timestamp.now(),
+                              }, SetOptions(merge: true));
+
+                          if (!context.mounted) return;
+
+                          setState(() {
+                            _bookStatus = "reading";
+                          });
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PdfReaderPage(book: widget.book),
+                            ),
+                          );
+                        },
+
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gold,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          elevation: 0,
+
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
                         ),
 
-                        const SizedBox(height: 40),
+                        child: Text(
+                          _bookStatus == "reading"
+                              ? 'Continue Reading'
+                              : 'Start Reading',
 
-                        // START READING BUTTON
-                        SizedBox(
-                          width: double.infinity,
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
 
-                          child: ElevatedButton(
+                    const SizedBox(height: 14),
+
+                    // SECONDARY BUTTONS
+                    Row(
+                      children: [
+                        // Want to read
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              // REMOVE BOOK
+                              if (_bookStatus == "want_to_read") {
+                                await removeBookFromLibrary();
+
+                                return;
+                              }
+
+                              // ADD TO WANT TO READ
+                              await _libraryService.addBook(
+                                bookId: widget.book.id,
+                                status: "want_to_read",
+                                totalPages: widget.book.totalPages,
+                              );
+
+                              if (!context.mounted) return;
+
+                              setState(() {
+                                _bookStatus = "want_to_read";
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Added to Want To Read"),
+                                ),
+                              );
+                            },
+
+                            icon: const Icon(
+                              Icons.bookmark_border_rounded,
+                              color: AppColors.gold,
+                            ),
+
+                            label: Text(
+                              _bookStatus == "want_to_read"
+                                  ? 'Remove from List'
+                                  : 'Want to Read',
+
+                              style: GoogleFonts.outfit(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+
+                              side: const BorderSide(color: AppColors.border),
+
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // Favorite
+                        Expanded(
+                          child: OutlinedButton.icon(
                             onPressed: () async {
                               final user = FirebaseAuth.instance.currentUser;
 
                               if (user == null) return;
 
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(user.uid)
-                                  .collection('library')
-                                  .doc(widget.book.id)
-                                  .set({
-                                    "status": "reading",
-                                    "progress":
-                                        _currentPage / widget.book.totalPages,
-                                    "currentPage": _currentPage,
-                                    "totalPages": widget.book.totalPages,
-                                    "addedAt": Timestamp.now(),
-                                    "lastReadAt": Timestamp.now(),
-                                  }, SetOptions(merge: true));
-
-                              setState(() {
-                                _bookStatus = "reading";
-                              });
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      PdfReaderPage(book: widget.book),
-                                ),
-                              );
-                            },
-
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.gold,
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              elevation: 0,
-
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-
-                            child: Text(
-                              _bookStatus == "reading"
-                                  ? 'Continue Reading'
-                                  : 'Start Reading',
-
-                              style: GoogleFonts.outfit(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        // SECONDARY BUTTONS
-                        Row(
-                          children: [
-                            // Want to read
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  // REMOVE BOOK
-                                  if (_bookStatus == "want_to_read") {
-                                    await removeBookFromLibrary();
-
-                                    return;
-                                  }
-
-                                  // ADD TO WANT TO READ
-                                  await _libraryService.addBook(
-                                    bookId: widget.book.id,
-                                    status: "want_to_read",
-                                    totalPages: widget.book.totalPages,
-                                  );
-
-                                  setState(() {
-                                    _bookStatus = "want_to_read";
-                                  });
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Added to Want To Read"),
-                                    ),
-                                  );
-                                },
-
-                                icon: const Icon(
-                                  Icons.bookmark_border_rounded,
-                                  color: AppColors.gold,
-                                ),
-
-                                label: Text(
-                                  _bookStatus == "want_to_read"
-                                      ? 'Remove from List'
-                                      : 'Want to Read',
-
-                                  style: GoogleFonts.outfit(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-
-                                  side: const BorderSide(
-                                    color: AppColors.border,
-                                  ),
-
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 12),
-
-                            // Favorite
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  final user =
-                                      FirebaseAuth.instance.currentUser;
-
-                                  if (user == null) return;
-
-                                  // REMOVE FAVORITE
-                                  if (_isFavorite) {
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(user.uid)
-                                        .collection('favorites')
-                                        .doc(widget.book.id)
-                                        .delete();
-
-                                    setState(() {
-                                      _isFavorite = false;
-                                    });
-
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: AppColors.surface,
-                                        behavior: SnackBarBehavior.floating,
-
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-
-                                        content: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.heart_broken_rounded,
-                                              color: Colors.red,
-                                            ),
-
-                                            const SizedBox(width: 12),
-
-                                            Expanded(
-                                              child: Text(
-                                                "Removed from favorites",
-                                                style: GoogleFonts.outfit(
-                                                  color: AppColors.textPrimary,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-
-                                    return;
-                                  }
-
-                                  // ADD FAVORITE
-                                  await FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(user.uid)
-                                      .collection('favorites')
-                                      .doc(widget.book.id)
-                                      .set({
-                                        "bookId": widget.book.id,
-                                        "addedAt": Timestamp.now(),
-                                      });
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: AppColors.surface,
-                                      behavior: SnackBarBehavior.floating,
-
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-
-                                      content: Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.favorite_rounded,
-                                            color: Colors.red,
-                                          ),
-
-                                          const SizedBox(width: 12),
-
-                                          Expanded(
-                                            child: Text(
-                                              "Added to your favorites ❤️",
-                                              style: GoogleFonts.outfit(
-                                                color: AppColors.textPrimary,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      duration: const Duration(seconds: 2),
-                                    ),
-                                  );
-
-                                  setState(() {
-                                    _isFavorite = true;
-                                  });
-                                },
-
-                                icon: Icon(
-                                  _isFavorite
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  color: AppColors.gold,
-                                ),
-
-                                label: Text(
-                                  _isFavorite ? 'Remove Favorite' : 'Favorite',
-
-                                  style: GoogleFonts.outfit(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-
-                                  side: const BorderSide(
-                                    color: AppColors.border,
-                                  ),
-
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // MARK AS COMPLETED BUTTON
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              // MARK INCOMPLETE
-                              if (_bookStatus == "completed") {
+                              // REMOVE FAVORITE
+                              if (_isFavorite) {
                                 await FirebaseFirestore.instance
                                     .collection('users')
-                                    .doc(FirebaseAuth.instance.currentUser!.uid)
-                                    .collection('library')
+                                    .doc(user.uid)
+                                    .collection('favorites')
                                     .doc(widget.book.id)
-                                    .set({
-                                      "status": "reading",
-                                      "progress": 0,
-                                      "currentPage": 0,
-                                    }, SetOptions(merge: true));
+                                    .delete();
+
+                                if (!context.mounted) return;
 
                                 setState(() {
-                                  _bookStatus = "reading";
-                                  _currentPage = 0;
+                                  _isFavorite = false;
                                 });
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: AppColors.surface,
+                                    behavior: SnackBarBehavior.floating,
+
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+
+                                    content: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.heart_broken_rounded,
+                                          color: Colors.red,
+                                        ),
+
+                                        const SizedBox(width: 12),
+
+                                        Expanded(
+                                          child: Text(
+                                            "Removed from favorites",
+                                            style: GoogleFonts.outfit(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
 
                                 return;
                               }
 
-                              // COMPLETE BOOK
-                              await completeBook();
+                              // ADD FAVORITE
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(user.uid)
+                                  .collection('favorites')
+                                  .doc(widget.book.id)
+                                  .set({
+                                    "bookId": widget.book.id,
+                                    "addedAt": Timestamp.now(),
+                                  });
+
+                              if (!context.mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: AppColors.surface,
+                                  behavior: SnackBarBehavior.floating,
+
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+
+                                  content: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.favorite_rounded,
+                                        color: Colors.red,
+                                      ),
+
+                                      const SizedBox(width: 12),
+
+                                      Expanded(
+                                        child: Text(
+                                          "Added to your favorites ❤️",
+                                          style: GoogleFonts.outfit(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
 
                               setState(() {
-                                _bookStatus = "completed";
-                                _currentPage = widget.book.totalPages;
+                                _isFavorite = true;
                               });
                             },
 
                             icon: Icon(
-                              _bookStatus == "completed"
-                                  ? Icons.refresh_rounded
-                                  : Icons.check_circle_rounded,
+                              _isFavorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
                               color: AppColors.gold,
                             ),
 
                             label: Text(
-                              _bookStatus == "completed"
-                                  ? "Mark Incomplete"
-                                  : "Mark as Completed",
+                              _isFavorite ? 'Remove Favorite' : 'Favorite',
 
                               style: GoogleFonts.outfit(
                                 color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
 
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              side: BorderSide(
-                                color: _bookStatus == "completed"
-                                    ? AppColors.border
-                                    : AppColors.gold,
-                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+
+                              side: const BorderSide(color: AppColors.border),
+
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 40),
                       ],
                     ),
-                  ),
-                ],
+
+                    const SizedBox(height: 18),
+
+                    // MARK AS COMPLETED BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          // MARK INCOMPLETE
+                          if (_bookStatus == "completed") {
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser!.uid)
+                                .collection('library')
+                                .doc(widget.book.id)
+                                .set({
+                                  "status": "reading",
+                                  "progress": 0,
+                                  "currentPage": 0,
+                                }, SetOptions(merge: true));
+
+                            setState(() {
+                              _bookStatus = "reading";
+                              _currentPage = 0;
+                            });
+
+                            return;
+                          }
+
+                          // COMPLETE BOOK
+                          await completeBook();
+
+                          setState(() {
+                            _bookStatus = "completed";
+                            _currentPage = widget.book.totalPages;
+                          });
+                        },
+
+                        icon: Icon(
+                          _bookStatus == "completed"
+                              ? Icons.refresh_rounded
+                              : Icons.check_circle_rounded,
+                          color: AppColors.gold,
+                        ),
+
+                        label: Text(
+                          _bookStatus == "completed"
+                              ? "Mark Incomplete"
+                              : "Mark as Completed",
+
+                          style: GoogleFonts.outfit(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          side: BorderSide(
+                            color: _bookStatus == "completed"
+                                ? AppColors.border
+                                : AppColors.gold,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

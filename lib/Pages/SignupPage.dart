@@ -184,14 +184,6 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // ── Simple reusable field (UI only, no controller) ──
-  Widget _field(String hint, IconData icon) {
-    return TextField(
-      style: GoogleFonts.outfit(color: _ink),
-      decoration: _input(hint, icon),
-    );
-  }
-
   // ── Shared decoration for all inputs ──
   InputDecoration _input(String hint, IconData icon) {
     return InputDecoration(

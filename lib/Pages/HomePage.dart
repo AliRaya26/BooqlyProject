@@ -1,5 +1,7 @@
+import 'package:booqly/Pages/BookChatPage.dart';
 import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/Pages/SearchByTitlePage.dart';
+import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -484,13 +486,10 @@ class _HomePageState extends State<HomePage> {
 
       case 1:
         return const LibraryPage();
-
       case 2:
-        return const Center(child: Text("Explore"));
-
+        return const BookChatPage();
       case 3:
-        return const Center(child: Text("Profile"));
-
+        return const SettingsPage(embeddedInTab: true);
       default:
         return const SizedBox.shrink();
     }
@@ -634,22 +633,49 @@ class _TopBar extends StatelessWidget {
               letterSpacing: 0.05,
             ),
           ),
-          Container(
-            width: 34,
-            height: 34,
-            decoration: const BoxDecoration(
-              color: AppColors.gold,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'L',
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.bg,
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(
+                  Icons.settings_outlined,
+                  color: AppColors.textMuted,
+                  size: 22,
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsPage(),
+                    ),
+                  );
+                },
               ),
-            ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsPage(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: const BoxDecoration(
+                    color: AppColors.gold,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'L',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.bg,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1025,7 +1051,7 @@ class _BookSpine extends StatelessWidget {
           Container(
             width: 7,
             decoration: BoxDecoration(
-              color: book.spineColor.withOpacity(0.5),
+              color: book.spineColor.withValues(alpha: 0.5),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(10),
                 bottomLeft: Radius.circular(10),
@@ -1042,7 +1068,7 @@ class _BookSpine extends StatelessWidget {
                 style: GoogleFonts.cormorantGaramond(
                   fontSize: 11,
                   fontStyle: FontStyle.italic,
-                  color: book.spineColor.withOpacity(0.8),
+                  color: book.spineColor.withValues(alpha: 0.8),
                   letterSpacing: 0.05,
                 ),
               ),
@@ -1232,7 +1258,7 @@ class _WantToReadSection extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.only(left: 22, right: 22, bottom: 4),
             itemCount: books.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
               final book = books[i];
 
@@ -1509,15 +1535,15 @@ class _BottomNav extends StatelessWidget {
           ),
           _NavFab(onTap: onAddTap),
           _NavItem(
-            icon: Icons.explore_rounded,
-            label: 'Explore',
+            icon: Icons.chat_rounded,
+            label: 'Ask AI',
             index: 2,
             selected: selectedIndex,
             onTap: onTap,
           ),
           _NavItem(
-            icon: Icons.person_rounded,
-            label: 'Profile',
+            icon: Icons.settings_rounded,
+            label: 'Settings',
             index: 3,
             selected: selectedIndex,
             onTap: onTap,
@@ -1601,7 +1627,7 @@ class _NavFab extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: AppColors.gold.withOpacity(0.3),
+                color: AppColors.gold.withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),

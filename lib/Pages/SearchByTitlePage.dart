@@ -519,7 +519,7 @@ class _CategorySection extends StatelessWidget {
 
             itemCount: category.books.length,
 
-            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            separatorBuilder: (context, index) => const SizedBox(width: 14),
 
             itemBuilder: (_, i) {
               return _BookCard(

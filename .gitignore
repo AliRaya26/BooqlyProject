@@ -1,3 +1,7 @@
+# Secrets (use assets/config.env.example as template)
+assets/config.env
+assets/config.env.local
+
 # Miscellaneous
 *.class
 *.log
