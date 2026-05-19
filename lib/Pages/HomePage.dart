@@ -154,19 +154,20 @@ class _HomePageState extends State<HomePage> {
         .snapshots()
         .listen((snapshot) async {
           if (snapshot.docs.isEmpty) {
-            if (mounted)
+            if (mounted) {
               setState(() {
                 continueBook = null;
                 isLoadingContinue = false;
               });
+            }
             return;
           }
 
           // Sort by lastReadAt descending — most recent first
           final sorted = [...snapshot.docs]
             ..sort((a, b) {
-              final aData = a.data() as Map<String, dynamic>;
-              final bData = b.data() as Map<String, dynamic>;
+              final aData = a.data();
+              final bData = b.data();
               final aTime =
                   (aData['lastReadAt'] as Timestamp?) ?? Timestamp(0, 0);
               final bTime =
@@ -176,7 +177,7 @@ class _HomePageState extends State<HomePage> {
 
           final doc = sorted.first;
           final bookId = doc.id;
-          final libraryData = doc.data() as Map<String, dynamic>;
+          final libraryData = doc.data();
 
           try {
             final bookDoc = await FirebaseFirestore.instance
@@ -185,11 +186,12 @@ class _HomePageState extends State<HomePage> {
                 .get();
 
             if (!bookDoc.exists) {
-              if (mounted)
+              if (mounted) {
                 setState(() {
                   continueBook = null;
                   isLoadingContinue = false;
                 });
+              }
               return;
             }
 
@@ -214,11 +216,12 @@ class _HomePageState extends State<HomePage> {
             }
           } catch (e) {
             debugPrint('❌ stream book fetch error: $e');
-            if (mounted)
+            if (mounted) {
               setState(() {
                 continueBook = null;
                 isLoadingContinue = false;
               });
+            }
           }
         });
   }
@@ -375,18 +378,19 @@ class _HomePageState extends State<HomePage> {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             continueBook = null;
             isLoadingContinue = false;
           });
+        }
         return;
       }
 
       // Sort manually — safe even when lastReadAt is missing
       snapshot.docs.sort((a, b) {
-        final aData = a.data() as Map<String, dynamic>;
-        final bData = b.data() as Map<String, dynamic>;
+        final aData = a.data();
+        final bData = b.data();
         final aTime = (aData['lastReadAt'] as Timestamp?) ?? Timestamp(0, 0);
         final bTime = (bData['lastReadAt'] as Timestamp?) ?? Timestamp(0, 0);
         return bTime.compareTo(aTime);
@@ -394,7 +398,7 @@ class _HomePageState extends State<HomePage> {
 
       final doc = snapshot.docs.first;
       final bookId = doc.id;
-      final libraryData = doc.data() as Map<String, dynamic>;
+      final libraryData = doc.data();
 
       final bookDoc = await FirebaseFirestore.instance
           .collection('books')
@@ -402,11 +406,12 @@ class _HomePageState extends State<HomePage> {
           .get();
 
       if (!bookDoc.exists) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             continueBook = null;
             isLoadingContinue = false;
           });
+        }
         return;
       }
 
@@ -431,11 +436,12 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       debugPrint('❌ fetchContinueReadingBook error: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           continueBook = null;
           isLoadingContinue = false;
         });
+      }
     }
   }
 
@@ -1031,55 +1037,6 @@ class _ContinueReadingCard extends StatelessWidget {
   }
 }
 
-// ─── Book Spine (static shelf) ────────────────────────────────────────────────
-
-class _BookSpine extends StatelessWidget {
-  const _BookSpine({required this.book});
-  final Book book;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 68,
-      height: 96,
-      decoration: BoxDecoration(
-        color: book.coverBg,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Stack(
-        children: [
-          Container(
-            width: 7,
-            decoration: BoxDecoration(
-              color: book.spineColor.withValues(alpha: 0.5),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                bottomLeft: Radius.circular(10),
-              ),
-            ),
-          ),
-          Center(
-            child: RotatedBox(
-              quarterTurns: 3,
-              child: Text(
-                book.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.cormorantGaramond(
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                  color: book.spineColor.withValues(alpha: 0.8),
-                  letterSpacing: 0.05,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── Reading Streak ───────────────────────────────────────────────────────────
 
 class _StreakSection extends StatelessWidget {
@@ -1252,7 +1209,7 @@ class _WantToReadSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionLabel('Want to read'),
-        Container(
+        SizedBox(
           height: 200,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,

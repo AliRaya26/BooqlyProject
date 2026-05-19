@@ -1,4 +1,6 @@
 import 'package:booqly/Pages/HomePage.dart';
+import 'package:booqly/Pages/WelcomePage.dart';
+import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/calendar_service.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,12 +19,14 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final AuthService _authService = AuthService();
   final CalendarService _calendarService = CalendarService();
   final ReadingMotivationService _motivationService =
       ReadingMotivationService();
 
   bool _loading = true;
   bool _linking = false;
+  bool _loggingOut = false;
   bool _calendarLinked = false;
   String? _calendarEmail;
   bool _remindersEnabled = true;
@@ -121,6 +125,46 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _toggleReminders(bool value) async {
     await _motivationService.setRemindersEnabled(value);
     setState(() => _remindersEnabled = value);
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          'Log out?',
+          style: GoogleFonts.outfit(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'You will need to sign in again to access your library.',
+          style: GoogleFonts.outfit(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.outfit()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Log out',
+              style: GoogleFonts.outfit(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _loggingOut = true);
+    await _authService.signOut();
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const WelcomePage()),
+      (_) => false,
+    );
   }
 
   @override
@@ -239,6 +283,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 12),
                 _hintCard(
                   'Booqly checks today\'s calendar (8am–10pm) for gaps of 25+ minutes and sends a gentle reminder at the start of each block.',
+                ),
+                const SizedBox(height: 28),
+                _sectionLabel('Account'),
+                const SizedBox(height: 10),
+                _SettingsTile(
+                  icon: Icons.logout_rounded,
+                  title: 'Log out',
+                  subtitle: 'Sign out of your Booqly account',
+                  trailing: _loggingOut
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.redAccent,
+                          ),
+                        )
+                      : Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.redAccent.withValues(alpha: 0.9),
+                        ),
+                  onTap: _loggingOut ? null : _logout,
                 ),
               ],
             ),

@@ -115,6 +115,11 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (e) {
+      debugPrint('AuthService.signOut Google: $e');
+    }
     await _auth.signOut();
   }
 

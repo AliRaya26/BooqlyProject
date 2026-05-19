@@ -56,14 +56,13 @@ class GeminiChatService {
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
 
-  /// Models tried in order until one works (verified via ListModels API).
+  /// Models tried in order until one works (free-tier friendly first).
   static const _modelIds = [
     'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
     'gemini-flash-lite-latest',
     'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
     'gemini-2.0-flash-lite',
-    'gemini-2.0-flash',
   ];
 
   String? _systemPrompt;
@@ -222,12 +221,16 @@ class GeminiChatService {
   }
 
   Future<void> startSession(BookChatContext context) async {
+    if (!isConfigured) {
+      throw GeminiApiException(
+        'GEMINI_API_KEY is missing. Add it to assets/config.env and restart the app.',
+      );
+    }
+
     _systemPrompt = buildSystemPrompt(context);
     _context = context;
     _history.clear();
     _activeModel = null;
-
-    await validateApiKey();
   }
 
   Future<String> sendMessage(
@@ -410,6 +413,12 @@ class GeminiChatService {
 
       if (response.statusCode == 429 || lower.contains('quota')) {
         throw GeminiApiException('Quota exceeded for $model');
+      }
+
+      if (response.statusCode == 503 ||
+          lower.contains('high demand') ||
+          lower.contains('unavailable')) {
+        throw GeminiApiException('Model $model busy (trying another…)');
       }
 
       throw GeminiApiException('Gemini error (${response.statusCode}): $message');
