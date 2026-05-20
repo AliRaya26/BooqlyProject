@@ -6,6 +6,25 @@ service cloud.firestore {
     match /books/{bookId} {
       allow read: if request.auth != null;
       allow write: if false;
+
+      match /feedbacks/{feedbackId} {
+        allow read: if request.auth != null;
+        // Demo seed docs only (fb_1 … fb_5), written once per book by the app.
+        allow create: if request.auth != null
+          && feedbackId.matches('^fb_[1-5]$')
+          && request.resource.data.bookId == bookId
+          && request.resource.data.keys().hasAll(['bookId', 'userName', 'rating', 'comment', 'createdAt'])
+          && request.resource.data.userName is string
+          && request.resource.data.userName.size() >= 2
+          && request.resource.data.userName.size() <= 40
+          && request.resource.data.comment is string
+          && request.resource.data.comment.size() >= 10
+          && request.resource.data.comment.size() <= 500
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5;
+        allow update, delete: if false;
+      }
     }
 
     match /app_config/{docId} {
@@ -24,6 +43,29 @@ service cloud.firestore {
       match /{subcollection}/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+    }
+
+    // Used before sign-up / sign-in to detect registered emails (no passwords stored).
+    match /email_index/{email} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // Outbound mail queue for Firebase "Trigger Email" extension (signup on web).
+    match /mail/{docId} {
+      allow read: if false;
+      allow create: if request.resource.data.keys().hasOnly(['to', 'message'])
+        && request.resource.data.to is string
+        && request.resource.data.message is map
+        && request.resource.data.message.keys().hasOnly(['subject', 'html'])
+        && request.resource.data.message.subject is string
+        && request.resource.data.message.html is string
+        && request.resource.data.message.subject.size() > 0
+        && request.resource.data.message.subject.size() < 200
+        && request.resource.data.message.html.size() > 0
+        && request.resource.data.message.html.size() < 20000;
+      allow update, delete: if false;
     }
   }
 }

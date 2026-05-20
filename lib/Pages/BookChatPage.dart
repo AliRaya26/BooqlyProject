@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:booqly/Pages/HomePage.dart';
 import 'package:booqly/models/chat_message.dart';
+import 'package:booqly/services/book_lookup_service.dart';
 import 'package:booqly/services/gemini_chat_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,9 +27,11 @@ class _BookChatPageState extends State<BookChatPage> {
   final List<ChatMessage> _messages = [];
   final List<String> _suggestions = const [
     'What should I read next?',
-    'Tell me about Atomic Habits',
+    'What is the rating for Atomic Habits?',
     'I want something motivating and short',
   ];
+
+  final BookLookupService _lookupService = BookLookupService();
 
   Uint8List? _pendingImageBytes;
   String? _pendingImageMime;
@@ -162,15 +165,17 @@ class _BookChatPageState extends State<BookChatPage> {
     _scrollToBottom();
 
     try {
+      final lookupHint = _buildLookupHint(text);
       final String reply;
       if (hasImage && imageBytes != null) {
         reply = await _chatService.sendMessageWithImage(
           imageBytes: imageBytes,
           mimeType: imageMime,
           userText: text.isEmpty ? null : text,
+          lookupHint: lookupHint,
         );
       } else {
-        reply = await _chatService.sendMessage(text);
+        reply = await _chatService.sendMessage(text, lookupHint: lookupHint);
       }
 
       if (!mounted) return;
@@ -197,6 +202,28 @@ class _BookChatPageState extends State<BookChatPage> {
   String _friendlyError(Object e) {
     if (e is GeminiApiException) return e.message;
     return 'Sorry, I couldn\'t reply. Please try again.\n\n$e';
+  }
+
+  String? _buildLookupHint(String message) {
+    final context = _chatService.context;
+    if (context == null) return null;
+
+    final match = _lookupService.findBestMatch(
+      query: message,
+      context: context,
+    );
+    if (match == null) return null;
+
+    final feedback = context.feedbackFor(match.book.id);
+    final includeRating =
+        _lookupService.messageMentionsRating(message) ||
+        (feedback?.hasReviews ?? false);
+
+    return _lookupService.formatLookupSummary(
+      match,
+      queryLabel: message,
+      feedback: includeRating ? feedback : null,
+    );
   }
 
   void _scrollToBottom() {

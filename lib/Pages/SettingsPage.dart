@@ -2,8 +2,11 @@ import 'package:booqly/Pages/HomePage.dart';
 import 'package:booqly/Pages/WelcomePage.dart';
 import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/calendar_service.dart';
+import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
+import 'package:booqly/widgets/calendar_link_web_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -48,39 +51,63 @@ class _SettingsPageState extends State<SettingsPage> {
       _calendarLinked = linked;
       _calendarEmail = email;
       _remindersEnabled = reminders;
-      _hasOAuthConfig = _calendarService.hasOAuthConfig;
+      _hasOAuthConfig = GoogleOAuthConfig.hasWebClientId &&
+          GoogleOAuthConfig.isBooqlyWebClient;
       _loading = false;
     });
   }
 
   Future<void> _linkCalendar() async {
     setState(() => _linking = true);
-    final result = await _calendarService.linkAccount();
+    var result = await _calendarService.linkAccount();
+    if (!mounted) return;
+
+    if (!result.success &&
+        result.needsWebSignInButton &&
+        kIsWeb &&
+        mounted) {
+      setState(() => _linking = false);
+      final linked = await CalendarLinkWebDialog.show(
+        context,
+        calendarService: _calendarService,
+      );
+      if (!linked || !mounted) return;
+      setState(() => _linking = true);
+      result = await _calendarService.finalizeWebLink();
+    }
+
     if (!mounted) return;
 
     if (result.success) {
-      await _motivationService.requestNotificationPermission();
-      await _motivationService.refreshSchedule();
-      setState(() {
-        _calendarLinked = true;
-        _calendarEmail = result.email;
-        _remindersEnabled = true;
-        _linking = false;
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Google Calendar linked as ${result.email ?? 'your account'}.',
-          ),
-        ),
-      );
+      await _applyLinkedCalendar(result.email);
     } else {
       setState(() => _linking = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.errorMessage ?? 'Link failed.')),
       );
     }
+  }
+
+  Future<void> _applyLinkedCalendar(String? email) async {
+    await _motivationService.requestNotificationPermission();
+    await _motivationService.refreshSchedule();
+    if (!mounted) return;
+    setState(() {
+      _calendarLinked = true;
+      _calendarEmail = email;
+      _remindersEnabled = true;
+      _linking = false;
+    });
+    final resolvedEmail = email ?? await _calendarService.linkedEmail();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Google Calendar linked${resolvedEmail != null ? ' as $resolvedEmail' : ''}. '
+          'Free-time nudges are on.',
+        ),
+      ),
+    );
   }
 
   Future<void> _unlinkCalendar() async {
@@ -123,8 +150,33 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _toggleReminders(bool value) async {
+    if (!_calendarLinked) {
+      await _linkCalendar();
+      return;
+    }
+
+    if (value) {
+      final allowed = await _motivationService.requestNotificationPermission();
+      if (!allowed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Allow notifications in your browser to get reading nudges.',
+            ),
+          ),
+        );
+      }
+    }
+
     await _motivationService.setRemindersEnabled(value);
+    if (!mounted) return;
     setState(() => _remindersEnabled = value);
+
+    if (value && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Free-time reading nudges enabled.')),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -255,10 +307,15 @@ class _SettingsPageState extends State<SettingsPage> {
                       ? null
                       : (_calendarLinked ? _unlinkCalendar : _linkCalendar),
                 ),
-                if (!_hasOAuthConfig) ...[
+                if (!_hasOAuthConfig ||
+                    (!_calendarLinked && _calendarService.webOrigin != null)) ...[
                   const SizedBox(height: 10),
                   _hintCard(
-                    'Add GOOGLE_WEB_CLIENT_ID in assets/config.env, then enable the Google Calendar API in Google Cloud Console.',
+                    GoogleOAuthConfig.mismatchMessage ??
+                        'Calendar Link uses google_sign_in. Add this origin to your '
+                            '87414724762-… Web client in Google Cloud:\n'
+                            '${_calendarService.webOrigin}\n'
+                            '(see firebase/GOOGLE_CALENDAR_SETUP.md)',
                   ),
                 ],
                 const SizedBox(height: 28),
@@ -269,16 +326,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: 'Free-time nudges',
                   subtitle: _calendarLinked
                       ? 'Notify you to read instead of scroll when your calendar is open'
-                      : 'Link Google Calendar first',
+                      : 'Tap to link Google Calendar first',
                   trailing: Switch.adaptive(
                     value: _remindersEnabled && _calendarLinked,
-                    onChanged: _calendarLinked
-                        ? (v) => _toggleReminders(v)
-                        : null,
+                    onChanged: _linking
+                        ? null
+                        : (v) => _toggleReminders(v),
                     activeThumbColor: AppColors.gold,
                     activeTrackColor: AppColors.goldDim,
                   ),
-                  onTap: null,
+                  onTap: _linking || _calendarLinked ? null : _linkCalendar,
                 ),
                 const SizedBox(height: 12),
                 _hintCard(

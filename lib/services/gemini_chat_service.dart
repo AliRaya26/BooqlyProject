@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:booqly/models/book_model.dart';
+import 'package:booqly/models/feedback_model.dart';
 import 'package:booqly/services/book_service.dart';
+import 'package:booqly/services/feedback_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 
 class GeminiApiException implements Exception {
@@ -35,12 +37,16 @@ class BookChatContext {
   final List<LibraryBookEntry> libraryBooks;
   final List<BookModel> catalogBooks;
   final List<String> preferredGenres;
+  final Map<String, BookFeedbackSummary> feedbackByBookId;
 
   const BookChatContext({
     required this.libraryBooks,
     required this.catalogBooks,
     required this.preferredGenres,
+    this.feedbackByBookId = const {},
   });
+
+  BookFeedbackSummary? feedbackFor(String bookId) => feedbackByBookId[bookId];
 }
 
 class GeminiChatService {
@@ -48,6 +54,7 @@ class GeminiChatService {
       : _http = httpClient ?? http.Client();
 
   final BookService _bookService = BookService();
+  final FeedbackService _feedbackService = FeedbackService();
   final PreferencesService _preferencesService = PreferencesService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -119,10 +126,15 @@ class GeminiChatService {
       }
     }
 
+    final feedbackByBookId = await _feedbackService.getSummariesForBooks(
+      catalog.map((b) => b.id).toList(),
+    );
+
     final loaded = BookChatContext(
       libraryBooks: libraryBooks,
       catalogBooks: catalog,
       preferredGenres: preferredGenres,
+      feedbackByBookId: feedbackByBookId,
     );
     _context = loaded;
     return loaded;
@@ -144,6 +156,11 @@ class GeminiChatService {
         '- When they ask about a book (by name or photo), give useful feedback: '
         'what it\'s about, who it suits, strengths, possible downsides, and '
         '1–2 similar picks from the catalog if relevant.',
+      )
+      ..writeln(
+        '- When they ask about ratings, reviews, or scores, use READER FEEDBACK '
+        'below. Quote the average rating and summarize real reader comments — '
+        'do not invent ratings or reviews.',
       )
       ..writeln(
         '- For photos of a physical book: identify title and author if visible, '
@@ -179,9 +196,30 @@ class GeminiChatService {
     buffer.writeln();
     buffer.writeln('BOOQLY CATALOG:');
     for (final book in context.catalogBooks) {
+      final summary = context.feedbackFor(book.id);
+      final ratingPart = summary != null && summary.hasReviews
+          ? ' — ${summary.averageRatingLabel}/5 (${summary.count} reviews)'
+          : ' — no reviews yet';
       buffer.writeln(
-        '- "${book.title}" by ${book.author} (${book.category}) — ${book.description}',
+        '- "${book.title}" by ${book.author} (${book.category})$ratingPart — '
+        '${book.description}',
       );
+    }
+
+    buffer.writeln();
+    buffer.writeln('READER FEEDBACK (use for rating/review questions):');
+    var anyFeedback = false;
+    for (final book in context.catalogBooks) {
+      final summary = context.feedbackFor(book.id);
+      if (summary == null || !summary.hasReviews) continue;
+      anyFeedback = true;
+      buffer.writeln(
+        summary.formatForChat(title: book.title, author: book.author),
+      );
+      buffer.writeln();
+    }
+    if (!anyFeedback) {
+      buffer.writeln('(no reader feedback in the database yet)');
     }
 
     return buffer.toString();

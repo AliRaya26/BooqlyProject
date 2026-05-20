@@ -24,3 +24,24 @@ Publish `firestore.rules` from the project root (includes `preferences/{userId}`
 ## Library suggestions
 
 The **Library** tab loads `preferences/{uid}`, then suggests books from the `books` collection whose `category` matches `preferredGenres`, excluding books already in the user's library.
+
+## Reader feedback
+
+Each catalog book can have reviews at `books/{bookId}/feedbacks/{feedbackId}`.
+
+| Field | Type | Example |
+|-------|------|---------|
+| `bookId` | string | same as parent book |
+| `userName` | string | `Alex K.` |
+| `rating` | number | `5` (1–5) |
+| `comment` | string | review text |
+| `createdAt` | timestamp | |
+
+Seed sample data (5 reviews per book):
+
+```powershell
+cd "c:\Users\user\Desktop\Mobile Dev Project\BooqlyProject"
+node scripts/seed-feedbacks.cjs
+```
+
+Use `--dry-run` to preview or `--force` to replace existing feedback docs. Publish `firestore.rules` after changes.

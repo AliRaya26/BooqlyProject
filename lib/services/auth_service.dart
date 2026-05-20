@@ -1,14 +1,21 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthResult {
   final User? user;
   final String? errorMessage;
+  final bool isNewUser;
 
-  const AuthResult({this.user, this.errorMessage});
+  const AuthResult({
+    this.user,
+    this.errorMessage,
+    this.isNewUser = false,
+  });
 
   bool get isSuccess => user != null;
 }
@@ -18,6 +25,80 @@ class AuthService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final PreferencesService _preferencesService = PreferencesService();
 
+  GoogleSignIn? _googleSignIn;
+
+  static final _emailPattern = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+  );
+
+  bool isValidEmailFormat(String email) => _emailPattern.hasMatch(email);
+
+  String _normalizeEmail(String email) => email.trim().toLowerCase();
+
+  String? get _webClientId => GoogleOAuthConfig.webClientId;
+
+  GoogleSignIn get googleSignIn {
+    _googleSignIn ??= GoogleSignIn(
+      clientId: kIsWeb ? _webClientId : null,
+      scopes: const ['email', 'profile'],
+    );
+    return _googleSignIn!;
+  }
+
+  /// Web login uses Firebase [signInWithPopup] (no custom OAuth client required).
+  /// [GOOGLE_WEB_CLIENT_ID] is still used for Calendar linking on web.
+  bool get hasGoogleWebConfig => kIsWeb || (_webClientId != null);
+
+  Future<bool> emailIsRegistered(String email) async {
+    try {
+      final doc = await _firestore
+          .collection('email_index')
+          .doc(_normalizeEmail(email))
+          .get();
+      return doc.exists;
+    } catch (e) {
+      debugPrint('AuthService.emailIsRegistered: $e');
+      return false;
+    }
+  }
+
+  ({String firstName, String lastName}) _splitName(String? displayName) {
+    final trimmed = displayName?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return (firstName: 'User', lastName: '');
+    }
+    final parts = trimmed.split(RegExp(r'\s+'));
+    return (
+      firstName: parts.first,
+      lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+    );
+  }
+
+  String? _googleWebOriginHint() {
+    if (!kIsWeb) return null;
+    final origin = Uri.base.origin;
+    if (origin.isEmpty) return null;
+    return origin;
+  }
+
+  String _mapGoogleSignInError(Object e) {
+    final text = e.toString().toLowerCase();
+    if (text.contains('invalid_client') ||
+        text.contains('no registered origin') ||
+        text.contains('origin_mismatch')) {
+      final origin = _googleWebOriginHint();
+      return 'Google sign-in blocked by OAuth settings.\n\n'
+          '1. Firebase Console → Authentication → Sign-in method → enable Google.\n'
+          '2. Authentication → Settings → Authorized domains → ensure localhost is listed.\n'
+          '${origin != null ? '3. If you still see this, add $origin to Google Cloud OAuth Web client origins (firebase/GOOGLE_CALENDAR_SETUP.md).\n' : ''}'
+          '\nThen hot restart the app (R) and try again.';
+    }
+    if (text.contains('popup') && text.contains('block')) {
+      return 'Google sign-in popup was blocked. Allow popups for localhost in your browser.';
+    }
+    return _mapError(e);
+  }
+
   String _mapError(Object e) {
     if (e is FirebaseAuthException) {
       return switch (e.code) {
@@ -25,9 +106,12 @@ class AuthService {
           'This email is already registered. Try signing in.',
         'weak-password' => 'Password must be at least 6 characters.',
         'invalid-email' => 'Please enter a valid email address.',
-        'user-not-found' ||
-        'wrong-password' ||
-        'invalid-credential' => 'Invalid email or password.',
+        'user-not-found' => 'Wrong email',
+        'wrong-password' => 'Wrong password',
+        'invalid-credential' => 'Wrong email or password.',
+        'account-exists-with-different-credential' =>
+          'This email uses password sign-in. Log in with email and password.',
+        'popup-closed-by-user' => 'Google sign-in cancelled.',
         _ => e.message ?? 'Authentication failed.',
       };
     }
@@ -52,6 +136,12 @@ class AuthService {
       'email': email,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    if (email.isNotEmpty) {
+      await _firestore.collection('email_index').doc(_normalizeEmail(email)).set({
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
 
     await _preferencesService.createEmptyPreferences(uid);
   }
@@ -88,10 +178,9 @@ class AuthService {
         );
       } catch (e) {
         debugPrint('AuthService.signUp profile write failed: $e');
-        // Auth succeeded; onboarding can still save preferences later.
       }
 
-      return AuthResult(user: user);
+      return AuthResult(user: user, isNewUser: true);
     } catch (e) {
       debugPrint('AuthService.signUp: $e');
       return AuthResult(errorMessage: _mapError(e));
@@ -102,12 +191,32 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    final trimmedEmail = email.trim();
+    if (!isValidEmailFormat(trimmedEmail)) {
+      return const AuthResult(errorMessage: 'Please enter a valid email address.');
+    }
+
     try {
       final result = await _auth.signInWithEmailAndPassword(
-        email: email,
+        email: trimmedEmail,
         password: password,
       );
       return AuthResult(user: result.user);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('AuthService.signIn: $e');
+      if (e.code == 'wrong-password') {
+        return const AuthResult(errorMessage: 'Wrong password');
+      }
+      if (e.code == 'user-not-found') {
+        return const AuthResult(errorMessage: 'Wrong email');
+      }
+      if (e.code == 'invalid-credential') {
+        final registered = await emailIsRegistered(trimmedEmail);
+        return AuthResult(
+          errorMessage: registered ? 'Wrong password' : 'Wrong email',
+        );
+      }
+      return AuthResult(errorMessage: _mapError(e));
     } catch (e) {
       debugPrint('AuthService.signIn: $e');
       return AuthResult(errorMessage: _mapError(e));
@@ -115,30 +224,46 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    try {
-      await GoogleSignIn().signOut();
-    } catch (e) {
-      debugPrint('AuthService.signOut Google: $e');
+    if (!kIsWeb) {
+      try {
+        await googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('AuthService.signOut Google: $e');
+      }
     }
     await _auth.signOut();
   }
 
+  /// Google sign-in / sign-up. Web uses Firebase popup; mobile uses [google_sign_in].
   Future<AuthResult> signInWithGoogle() async {
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
+      if (kIsWeb) {
+        final result = await _auth.signInWithPopup(GoogleAuthProvider());
+        return _completeGoogleSignIn(
+          result,
+          displayName: result.user?.displayName,
+          email: result.user?.email,
+        );
+      }
 
-      // 🔴 FORCE logout from previous session
-      await googleSignIn.signOut();
-      await _auth.signOut();
+      if (!hasGoogleWebConfig) {
+        return const AuthResult(
+          errorMessage: 'Google sign-in is not configured on this device.',
+        );
+      }
 
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         return const AuthResult(errorMessage: 'Google sign-in cancelled.');
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final googleAuth = await googleUser.authentication;
+      if (googleAuth.idToken == null) {
+        return const AuthResult(
+          errorMessage:
+              'Google did not return an ID token. Check OAuth client setup.',
+        );
+      }
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -146,26 +271,59 @@ class AuthService {
       );
 
       final result = await _auth.signInWithCredential(credential);
-      final user = result.user;
+      return _completeGoogleSignIn(
+        result,
+        displayName: googleUser.displayName ?? result.user?.displayName,
+        email: googleUser.email,
+      );
+    } catch (e, st) {
+      debugPrint('AuthService.signInWithGoogle: $e\n$st');
+      return AuthResult(errorMessage: _mapGoogleSignInError(e));
+    }
+  }
 
-      if (user == null) {
-        return const AuthResult(errorMessage: 'Google sign-in failed.');
-      }
+  Future<AuthResult> _completeGoogleSignIn(
+    UserCredential result, {
+    String? displayName,
+    String? email,
+  }) async {
+    final user = result.user;
+    if (user == null) {
+      return const AuthResult(errorMessage: 'Google sign-in failed.');
+    }
 
-      final doc = await _firestore.collection('users').doc(user.uid).get();
+    final firebaseNewUser = result.additionalUserInfo?.isNewUser ?? false;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    final isNewUser = firebaseNewUser || !doc.exists;
 
-      if (!doc.exists) {
+    if (isNewUser) {
+      final name = _splitName(displayName ?? user.displayName);
+      final resolvedEmail = email ?? user.email ?? '';
+
+      try {
         await _createUserDocument(
           uid: user.uid,
-          email: user.email ?? '',
-          firstName: user.displayName?.split(' ').first ?? 'User',
-          lastName: '',
+          email: resolvedEmail,
+          firstName: name.firstName,
+          lastName: name.lastName,
         );
+      } catch (e) {
+        debugPrint('AuthService.signInWithGoogle profile write failed: $e');
       }
 
-      return AuthResult(user: user);
-    } catch (e) {
-      return AuthResult(errorMessage: _mapError(e));
+      try {
+        final fullName = [
+          name.firstName,
+          if (name.lastName.isNotEmpty) name.lastName,
+        ].join(' ');
+        if (fullName.isNotEmpty) {
+          await user.updateDisplayName(fullName);
+        }
+      } catch (e) {
+        debugPrint('Display name update skipped: $e');
+      }
     }
+
+    return AuthResult(user: user, isNewUser: isNewUser);
   }
 }

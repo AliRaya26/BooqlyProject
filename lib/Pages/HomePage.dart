@@ -3,6 +3,7 @@ import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/Pages/SearchByTitlePage.dart';
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/Pages/BookDetailPage.dart';
+import 'package:booqly/services/feedback_seed_service.dart';
 import 'dart:async';
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
@@ -129,6 +131,16 @@ class _HomePageState extends State<HomePage> {
     _listenToContinueReading(); // ← stream instead of one-time fetch
     _listenToWantToRead(); // ← stream for want-to-read list as well
     _listenToStreak(); // ← load streak once on init (can be refreshed manually if needed)
+    _seedDummyFeedbacks();
+  }
+
+  Future<void> _seedDummyFeedbacks() async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+    try {
+      await FeedbackSeedService().seedDummyFeedbacksIfNeeded();
+    } catch (e, st) {
+      debugPrint('FeedbackSeed failed: $e\n$st');
+    }
   }
 
   @override

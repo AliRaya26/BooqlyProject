@@ -1,22 +1,26 @@
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as cal;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:booqly/models/free_time_slot.dart';
+import 'package:booqly/services/google_oauth_config.dart';
 
 class CalendarLinkResult {
   const CalendarLinkResult({
     required this.success,
     this.email,
     this.errorMessage,
+    this.needsWebSignInButton = false,
   });
 
   final bool success;
   final String? email;
   final String? errorMessage;
+
+  /// Web: [signIn] popup is unreliable — show [CalendarLinkWebDialog] instead.
+  final bool needsWebSignInButton;
 }
 
 /// Google Calendar read access for detecting free time between events.
@@ -32,18 +36,20 @@ class CalendarService {
   GoogleSignIn get _signIn {
     _googleSignIn ??= GoogleSignIn(
       scopes: [cal.CalendarApi.calendarReadonlyScope],
-      serverClientId: _webClientId,
+      // Web requires clientId (not serverClientId). Mobile uses serverClientId.
+      clientId: kIsWeb ? _webClientId : null,
+      serverClientId: kIsWeb ? null : _webClientId,
     );
     return _googleSignIn!;
   }
 
-  String? get _webClientId {
-    final fromEnv = dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim();
-    if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
-    return null;
-  }
+  String? get _webClientId => GoogleOAuthConfig.webClientId;
 
-  bool get hasOAuthConfig => _webClientId != null;
+  bool get hasOAuthConfig =>
+      GoogleOAuthConfig.hasWebClientId && GoogleOAuthConfig.isBooqlyWebClient;
+
+  /// Current web origin (e.g. http://localhost:54141) — must be in Google Cloud OAuth origins.
+  String? get webOrigin => kIsWeb && Uri.base.origin.isNotEmpty ? Uri.base.origin : null;
 
   Future<bool> isLinked() async {
     final prefs = await SharedPreferences.getInstance();
@@ -60,15 +66,16 @@ class CalendarService {
   }
 
   Future<CalendarLinkResult> linkAccount() async {
-    if (!hasOAuthConfig) {
-      return const CalendarLinkResult(
-        success: false,
-        errorMessage:
-            'Add GOOGLE_WEB_CLIENT_ID in assets/config.env (Google Cloud OAuth web client).',
-      );
+    final configError = GoogleOAuthConfig.mismatchMessage;
+    if (configError != null) {
+      return CalendarLinkResult(success: false, errorMessage: configError);
     }
 
     try {
+      if (kIsWeb) {
+        return await _linkAccountWeb();
+      }
+
       final account = await _signIn.signIn();
       if (account == null) {
         return const CalendarLinkResult(
@@ -77,26 +84,118 @@ class CalendarService {
         );
       }
 
-      final client = await _signIn.authenticatedClient();
-      if (client == null) {
-        return const CalendarLinkResult(
-          success: false,
-          errorMessage: 'Could not authorize Calendar access.',
-        );
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefLinked, true);
-      await prefs.setString(_prefEmail, account.email);
-
-      return CalendarLinkResult(success: true, email: account.email);
+      return _finalizeLink(account);
     } catch (e, st) {
       debugPrint('CalendarService.linkAccount: $e\n$st');
       return CalendarLinkResult(
         success: false,
-        errorMessage: 'Could not link Google Calendar. Check OAuth setup.',
+        errorMessage: _mapLinkError(e),
       );
     }
+  }
+
+  /// Web: One Tap / silent sign-in, then scope authorization (no deprecated popup).
+  Future<CalendarLinkResult> _linkAccountWeb() async {
+    final account = await _signIn.signInSilently();
+    if (account != null) {
+      return _finalizeLink(account);
+    }
+
+    return const CalendarLinkResult(
+      success: false,
+      needsWebSignInButton: true,
+      errorMessage:
+          'Tap the Google button to sign in, then allow Calendar access.',
+    );
+  }
+
+  /// Call after the user signs in via the web Google button.
+  Future<CalendarLinkResult> finalizeWebLink() async {
+    final account = _signIn.currentUser;
+    if (account == null) {
+      return const CalendarLinkResult(
+        success: false,
+        errorMessage: 'Sign in with Google first, then try Link again.',
+      );
+    }
+
+    try {
+      return await _finalizeLink(account);
+    } catch (e, st) {
+      debugPrint('CalendarService.finalizeWebLink: $e\n$st');
+      return CalendarLinkResult(
+        success: false,
+        errorMessage: _mapLinkError(e),
+      );
+    }
+  }
+
+  Future<CalendarLinkResult> _finalizeLink(GoogleSignInAccount account) async {
+    const calendarScope = cal.CalendarApi.calendarReadonlyScope;
+
+    if (kIsWeb) {
+      final hasScope = await _signIn.canAccessScopes([calendarScope]);
+      if (!hasScope) {
+        final granted = await _signIn.requestScopes([calendarScope]);
+        if (!granted) {
+          return const CalendarLinkResult(
+            success: false,
+            errorMessage:
+                'Calendar access was not granted. Try Link again and allow '
+                '“See your calendars”.',
+          );
+        }
+      }
+    }
+
+    final client = await _signIn.authenticatedClient();
+    if (client == null) {
+      return const CalendarLinkResult(
+        success: false,
+        errorMessage: 'Could not authorize Calendar access.',
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefLinked, true);
+    await prefs.setString(_prefEmail, account.email);
+
+    return CalendarLinkResult(success: true, email: account.email);
+  }
+
+  GoogleSignIn get signInForWebUi => _signIn;
+
+  String _mapLinkError(Object e) {
+    final text = e.toString().toLowerCase();
+    if (text.contains('popup_closed') || text.contains('cancelled')) {
+      return 'Google sign-in was cancelled or blocked.\n\n'
+          'Allow popups for localhost, then use the Google sign-in button on the '
+          'link screen (do not rely on the popup-only flow).';
+    }
+    if (text.contains('invalid_client') ||
+        text.contains('no registered origin') ||
+        text.contains('origin_mismatch')) {
+      final origin = webOrigin;
+      final clientHint = _webClientId != null
+          ? 'Client ID in use: ${_webClientId!.substring(0, 20)}… (must match web/index.html meta tag and Google Cloud Web client).'
+          : '';
+      return 'Calendar OAuth blocked (no registered origin).\n\n'
+          'This Link button uses google_sign_in with calendar scopes — not Firebase login.\n\n'
+          '${origin != null ? 'Add this exact URL to Google Cloud → Credentials → OAuth Web client → Authorized JavaScript origins:\n$origin\n\n' : ''}'
+          'Also add under Authorized redirect URIs if prompted.\n'
+          'Run: .\\scripts\\run-web.ps1 (port 54141).\n'
+          '$clientHint\n'
+          'See firebase/GOOGLE_CALENDAR_SETUP.md';
+    }
+    if (text.contains('idtoken') || text.contains('id_token')) {
+      final origin = webOrigin;
+      return 'Google did not return a token.${origin != null ? ' Add $origin to OAuth Web client → Authorized JavaScript origins.' : ''}';
+    }
+    if (text.contains('access_denied') || text.contains('403')) {
+      return 'Calendar access denied. Enable Google Calendar API and add the '
+          'calendar.readonly scope on the OAuth consent screen (see firebase/GOOGLE_CALENDAR_SETUP.md).';
+    }
+    return 'Could not link Google Calendar. Check OAuth setup (firebase/GOOGLE_CALENDAR_SETUP.md).';
   }
 
   Future<void> unlinkAccount() async {

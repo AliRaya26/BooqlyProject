@@ -1,6 +1,8 @@
 # Secrets (use assets/config.env.example as template)
 assets/config.env
 assets/config.env.local
+functions/.env
+functions/node_modules
 
 # Miscellaneous
 *.class

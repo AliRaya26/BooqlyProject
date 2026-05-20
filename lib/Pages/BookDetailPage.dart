@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:booqly/models/book_model.dart';
+import 'package:booqly/models/feedback_model.dart';
+import 'package:booqly/services/feedback_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 // ─────────────────────────────────────────────────────────────
 // COLORS
@@ -36,6 +42,8 @@ class BookDetailPage extends StatefulWidget {
 }
 
 final LibraryService _libraryService = LibraryService();
+final FeedbackService _feedbackService = FeedbackService();
+final EmailService _emailService = EmailService();
 
 bool _statusLoading = true;
 
@@ -200,6 +208,47 @@ class _BookDetailPageState extends State<BookDetailPage> {
   // MARK BOOK AS COMPLETED
   // ───────────────────────────────────────────────────────────
 
+  Future<String> _readerFirstName(String uid, User user) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final fromDoc = doc.data()?['firstName'] as String?;
+      if (fromDoc != null && fromDoc.trim().isNotEmpty) {
+        return fromDoc.trim();
+      }
+    } catch (e) {
+      debugPrint('BookDetailPage._readerFirstName: $e');
+    }
+
+    final display = user.displayName?.trim();
+    if (display != null && display.isNotEmpty) {
+      return display.split(RegExp(r'\s+')).first;
+    }
+    return 'Reader';
+  }
+
+  Future<void> _sendBookCompletedEmail(User user) async {
+    final email = user.email?.trim();
+    if (email == null || email.isEmpty) return;
+
+    final firstName = await _readerFirstName(user.uid, user);
+    final result = await _emailService.sendBookCompletedEmail(
+      toEmail: email,
+      firstName: firstName,
+      bookTitle: widget.book.title,
+      author: widget.book.author,
+      totalPages: widget.book.totalPages,
+    );
+
+    if (!result.success) {
+      debugPrint(
+        'BookDetailPage: completion email failed: ${result.errorMessage}',
+      );
+    }
+  }
+
   Future<void> completeBook() async {
     final user = FirebaseAuth.instance.currentUser;
 
@@ -218,6 +267,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
           "totalPages": widget.book.totalPages,
           "completedAt": Timestamp.now(),
         }, SetOptions(merge: true));
+
+    unawaited(_sendBookCompletedEmail(user));
 
     if (!mounted) return;
 
@@ -1182,6 +1233,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     ),
 
                     const SizedBox(height: 40),
+
+                    _BookFeedbacksSection(
+                      bookId: widget.book.id,
+                      feedbackService: _feedbackService,
+                    ),
+
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -1196,6 +1254,155 @@ class _BookDetailPageState extends State<BookDetailPage> {
 // ─────────────────────────────────────────────────────────────
 // INFO CARD
 // ─────────────────────────────────────────────────────────────
+
+class _BookFeedbacksSection extends StatelessWidget {
+  const _BookFeedbacksSection({
+    required this.bookId,
+    required this.feedbackService,
+  });
+
+  final String bookId;
+  final FeedbackService feedbackService;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FeedbackModel>>(
+      stream: feedbackService.feedbacksStream(bookId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(
+                color: AppColors.gold,
+                strokeWidth: 2,
+              ),
+            ),
+          );
+        }
+
+        final reviews = snapshot.data ?? [];
+        if (reviews.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final total = reviews.fold<int>(0, (acc, r) => acc + r.rating);
+        final average = total / reviews.length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Reader feedback',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                _StarRating(value: average, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  '${average.toStringAsFixed(1)} (${reviews.length})',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.gold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...reviews.map(
+              (review) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _FeedbackCard(review: review),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FeedbackCard extends StatelessWidget {
+  const _FeedbackCard({required this.review});
+
+  final FeedbackModel review;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  review.userName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              _StarRating(value: review.rating.toDouble(), size: 14),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            review.comment,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              height: 1.55,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StarRating extends StatelessWidget {
+  const _StarRating({required this.value, this.size = 16});
+
+  final double value;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final filled = value >= index + 1;
+        final half = !filled && value > index && value < index + 1;
+        return Icon(
+          filled
+              ? Icons.star_rounded
+              : half
+                  ? Icons.star_half_rounded
+                  : Icons.star_outline_rounded,
+          size: size,
+          color: AppColors.gold,
+        );
+      }),
+    );
+  }
+}
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({

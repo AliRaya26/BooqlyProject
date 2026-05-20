@@ -1,4 +1,5 @@
 import 'package:booqly/models/book_model.dart';
+import 'package:booqly/models/feedback_model.dart';
 import 'package:booqly/services/gemini_chat_service.dart';
 
 enum BookMatchLocation {
@@ -64,23 +65,47 @@ class BookLookupService {
     return best;
   }
 
-  String formatLookupSummary(BookLookupMatch? match, {String? queryLabel}) {
+  String formatLookupSummary(
+    BookLookupMatch? match, {
+    String? queryLabel,
+    BookFeedbackSummary? feedback,
+  }) {
     if (match == null) {
       final label = queryLabel != null ? ' "$queryLabel"' : '';
       return 'Not found$label in your library or the Booqly catalog.';
     }
 
     final b = match.book;
+    final ratingBlock = feedback != null && feedback.hasReviews
+        ? '\n${feedback.formatForChat(title: b.title, author: b.author)}'
+        : '';
+
     switch (match.location) {
       case BookMatchLocation.inLibrary:
         final status = _statusLabel(match.libraryStatus ?? '');
-        return '✓ "${b.title}" by ${b.author} is in your library ($status).';
+        return '✓ "${b.title}" by ${b.author} is in your library ($status).'
+            '$ratingBlock';
       case BookMatchLocation.inCatalogOnly:
         return '"${b.title}" by ${b.author} is in the Booqly catalog but not in your library yet. '
-            'You can add it from Search.';
+            'You can add it from Search.$ratingBlock';
       case BookMatchLocation.notFound:
         return 'Not found in your library or catalog.';
     }
+  }
+
+  bool messageMentionsRating(String message) {
+    final lower = message.toLowerCase();
+    const keywords = [
+      'rating',
+      'ratings',
+      'review',
+      'reviews',
+      'score',
+      'stars',
+      'rated',
+      'feedback',
+    ];
+    return keywords.any(lower.contains);
   }
 
   String _statusLabel(String status) {
