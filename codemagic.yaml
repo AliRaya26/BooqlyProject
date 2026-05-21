@@ -22,16 +22,7 @@ workflows:
         EMAIL_FROM: "Booqly <onboarding@resend.dev>"
     scripts:
       - name: Create assets/config.env for CI
-        script: |
-          set -e
-          mkdir -p assets
-          cat > assets/config.env <<EOF
-          GEMINI_API_KEY=${GEMINI_API_KEY:-}
-          GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID:-}
-          RESEND_API_KEY=${RESEND_API_KEY:-}
-          EMAIL_FROM=${EMAIL_FROM:-}
-          EOF
-          echo "Wrote assets/config.env (keys are not printed)."
+        script: chmod +x scripts/prepare_config_env.sh && ./scripts/prepare_config_env.sh
       - name: Flutter dependencies
         script: flutter pub get
       - name: Build unsigned iOS release

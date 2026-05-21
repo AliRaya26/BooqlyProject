@@ -7,8 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
-/// Sends transactional emails (signup, book completed). Web: Cloud Function, then
-/// Firestore mail queue (Trigger Email extension). Mobile: Resend API directly.
+/// Sends transactional emails (signup, book completed). All platforms call the
+/// `sendAuthEmail` Cloud Function, which delivers via Gmail SMTP (nodemailer).
+/// On mobile, Resend is kept as a legacy fallback in case the function is
+/// unavailable. On web, the Firestore mail queue (Trigger Email extension) is
+/// the secondary fallback.
 class EmailService {
   static const _callableName = 'sendAuthEmail';
   static const _passwordResetCallableName = 'sendPasswordResetEmail';
@@ -138,6 +141,50 @@ class EmailService {
     );
   }
 
+  /// Free-time nudge email: sent in parallel with the local notification when
+  /// the user has a calendar gap. [message] is the same one-liner that goes in
+  /// the notification, so the two stay consistent.
+  Future<EmailSendResult> sendFreeTimeNudgeEmail({
+    required String toEmail,
+    required String firstName,
+    required DateTime slotStart,
+    required Duration slotDuration,
+    required String message,
+  }) {
+    final greeting = firstName.isNotEmpty ? firstName : 'Reader';
+    final minutes = slotDuration.inMinutes;
+    final h24 = slotStart.hour;
+    final hour12 = h24 == 0 ? 12 : (h24 > 12 ? h24 - 12 : h24);
+    final mm = slotStart.minute.toString().padLeft(2, '0');
+    final amPm = h24 >= 12 ? 'PM' : 'AM';
+    final timeLabel = '$hour12:$mm $amPm';
+    final slotLabel = minutes >= 60
+        ? '~${(minutes / 60).toStringAsFixed(minutes % 60 == 0 ? 0 : 1)} hours'
+        : '$minutes minutes';
+
+    return _send(
+      to: toEmail,
+      subject: '$minutes min of free time — open a book instead',
+      html: '''
+<!DOCTYPE html>
+<html>
+<body style="font-family:Georgia,serif;background:#0E0C0A;color:#F5F0E8;padding:32px;margin:0;">
+  <div style="max-width:520px;margin:0 auto;">
+    <p style="font-size:40px;margin:0 0 8px;">📖</p>
+    <h1 style="color:#D4A96A;font-style:italic;margin:0 0 12px;font-weight:600;">A quiet moment, ${_escapeHtml(greeting)}</h1>
+    <p style="font-size:17px;line-height:1.6;margin:0 0 16px;">${_escapeHtml(message)}</p>
+    <div style="background:#1A1713;border:1px solid #2A2520;border-radius:16px;padding:18px 22px;margin:24px 0;">
+      <p style="margin:0;color:#888580;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;">Free block</p>
+      <p style="margin:6px 0 0;font-size:20px;font-weight:bold;color:#F5F0E8;">$timeLabel · $slotLabel</p>
+    </div>
+    <p style="font-size:15px;line-height:1.6;color:#888580;margin:24px 0 0;">A few pages now beats endlessly scrolling later. Booqly is right where you left off.</p>
+    <p style="color:#5a5853;margin-top:32px;font-size:12px;">You're getting this because Free-time nudges are enabled in Booqly settings. Turn them off any time from Settings → Free-time nudges.</p>
+  </div>
+</body>
+</html>''',
+    );
+  }
+
   Future<EmailSendResult> sendBookCompletedEmail({
     required String toEmail,
     required String firstName,
@@ -234,10 +281,8 @@ class EmailService {
             _webSetupHint,
       );
     }
-    final resend = await _sendViaResend(to: to, subject: subject, html: html);
-    if (resend.success) return resend;
-
-    // Tablet/phone: Resend may fail (key, domain). Fall back to Cloud Function.
+    // Mobile: prefer the Cloud Function (Gmail SMTP) since it sends to any
+    // recipient. Resend is kept as a legacy fallback for offline-Function cases.
     final callable = await _sendViaCallable(
       to: to,
       subject: subject,
@@ -247,13 +292,34 @@ class EmailService {
       return const EmailSendResult(success: true, delivered: true);
     }
 
+    // Only fall back to Resend when the function itself is missing/unreachable.
+    // If the function ran and rejected the send (e.g. bad Gmail password), do
+    // not silently try a different provider — surface the real error.
+    if (!_shouldFallbackFromCallable(callable.functionsErrorCode)) {
+      return EmailSendResult(
+        success: false,
+        errorMessage: callable.errorMessage ??
+            'Could not send email. Deploy the Cloud Function with scripts/deploy-email.ps1',
+      );
+    }
+
+    final resend = await _sendViaResend(to: to, subject: subject, html: html);
+    if (resend.success) return resend;
+
     return EmailSendResult(
       success: false,
       errorMessage:
-          resend.errorMessage ??
           callable.errorMessage ??
+          resend.errorMessage ??
           'Could not send email. Check connection and firebase/EMAIL_SETUP.md',
     );
+  }
+
+  bool _shouldFallbackFromCallable(String? code) {
+    return code == null ||
+        code == 'not-found' ||
+        code == 'unavailable' ||
+        code == 'unauthenticated';
   }
 
   bool _shouldFallbackToFirestoreMail(String? code) {
@@ -349,7 +415,9 @@ class EmailService {
       return const EmailSendResult(
         success: false,
         errorMessage:
-            'Add RESEND_API_KEY to assets/config.env and restart the app.',
+            'Email Cloud Function is not deployed. Run scripts/deploy-email.ps1 '
+            'after setting GMAIL_USER + GMAIL_APP_PASSWORD in functions/.env '
+            '(see firebase/EMAIL_SETUP.md).',
       );
     }
 
@@ -389,13 +457,27 @@ class EmailService {
   }
 
   String _parseResendError(int statusCode, String body) {
+    String? message;
     try {
       final parsed = jsonDecode(body) as Map<String, dynamic>;
-      final message = parsed['message']?.toString().trim();
-      if (message != null && message.isNotEmpty) return message;
+      message = parsed['message']?.toString().trim();
     } catch (_) {}
+
+    // Resend's free tier 403 ("You can only send testing emails to your own
+    // email address ...") is informative for devs but useless to end users.
+    // Collapse it to a single actionable line.
+    if (statusCode == 403 &&
+        (message?.toLowerCase().contains('testing emails') ?? false)) {
+      return 'Email service is in test mode and cannot send to this address. '
+          'Deploy the Cloud Function (scripts/deploy-email.ps1) or verify a '
+          'domain at resend.com/domains.';
+    }
+
+    if (message != null && message.isNotEmpty) return message;
+
     if (statusCode == 403) {
-      return 'Resend blocked this recipient. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain (see firebase/RESEND_DOMAIN.md).';
+      return 'Resend blocked this recipient. Verify a domain at resend.com/domains '
+          'and set EMAIL_FROM to an address on that domain (see firebase/EMAIL_SETUP.md).';
     }
     return 'Could not send email ($statusCode).';
   }
@@ -407,7 +489,7 @@ class EmailService {
     }
     return switch (e.code) {
       'failed-precondition' =>
-        'Email could not be sent. Verify a domain in Resend and set EMAIL_FROM to that domain (firebase/RESEND_DOMAIN.md).',
+        'Email could not be sent. Set GMAIL_USER + GMAIL_APP_PASSWORD in functions/.env and redeploy with scripts/deploy-email.ps1.',
       'unavailable' || 'not-found' => null,
       'invalid-argument' => e.message ?? 'Invalid email request.',
       'internal' =>

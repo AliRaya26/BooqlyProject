@@ -1,14 +1,16 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const resendApiKey = defineString("RESEND_API_KEY");
+const gmailUser = defineString("GMAIL_USER");
+const gmailAppPassword = defineString("GMAIL_APP_PASSWORD");
 const emailFrom = defineString("EMAIL_FROM", {
-  default: "Booqly <noreply@yourdomain.com>",
+  default: "Booqly <noreply@booqly.app>",
 });
 
 const emailPattern =
@@ -22,43 +24,69 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-async function deliverViaResend({ to, subject, html }) {
-  const apiKey = resendApiKey.value();
-  if (!apiKey) {
+let cachedTransporter = null;
+let cachedUser = null;
+let cachedPassword = null;
+
+function getTransporter() {
+  const user = gmailUser.value()?.trim();
+  // Gmail shows the App Password with spaces; strip them so users can paste
+  // it as-is.
+  const pass = gmailAppPassword.value()?.replace(/\s+/g, "");
+
+  if (!user || !pass) {
     throw new HttpsError(
       "failed-precondition",
-      "RESEND_API_KEY is not set on Firebase Functions.",
+      "GMAIL_USER / GMAIL_APP_PASSWORD are not set on Firebase Functions. " +
+        "Create a Gmail App Password (myaccount.google.com/apppasswords) " +
+        "and redeploy.",
     );
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: emailFrom.value(),
-      to: [to.trim()],
-      subject: subject.trim(),
-      html: html.trim(),
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    console.error("Resend error", response.status, body);
-    let detail = `Resend returned ${response.status}.`;
-    try {
-      const parsed = JSON.parse(body);
-      if (parsed?.message) detail = parsed.message;
-    } catch (_) {
-      if (body) detail = body.slice(0, 200);
-    }
-    throw new HttpsError("failed-precondition", detail);
+  if (cachedTransporter && cachedUser === user && cachedPassword === pass) {
+    return cachedTransporter;
   }
 
-  return { success: true };
+  cachedTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+  cachedUser = user;
+  cachedPassword = pass;
+  return cachedTransporter;
+}
+
+async function deliverViaGmail({ to, subject, html }) {
+  const transporter = getTransporter();
+
+  try {
+    await transporter.sendMail({
+      from: emailFrom.value(),
+      to: to.trim(),
+      subject: subject.trim(),
+      html: html.trim(),
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("Gmail send error", err);
+    const message =
+      err && typeof err.message === "string" ? err.message : String(err);
+
+    // Gmail returns 535-5.7.8 when the app password is wrong; surface a
+    // helpful error so the caller can fix it.
+    if (/Invalid login|Username and Password not accepted|535/i.test(message)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Gmail rejected the App Password. Recreate it at " +
+          "myaccount.google.com/apppasswords and redeploy.",
+      );
+    }
+
+    throw new HttpsError(
+      "internal",
+      `Gmail could not deliver the email: ${message.slice(0, 200)}`,
+    );
+  }
 }
 
 exports.sendAuthEmail = onCall(
@@ -79,7 +107,7 @@ exports.sendAuthEmail = onCall(
       throw new HttpsError("invalid-argument", "Email body is required.");
     }
 
-    return deliverViaResend({ to, subject, html });
+    return deliverViaGmail({ to, subject, html });
   },
 );
 
@@ -146,7 +174,7 @@ exports.sendPasswordResetEmail = onCall(
 </body>
 </html>`;
 
-    await deliverViaResend({
+    await deliverViaGmail({
       to: email,
       subject: "Reset your Booqly password",
       html,

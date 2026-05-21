@@ -2,7 +2,7 @@
 
 **Booqly** is a cross-platform mobile reading companion built with **Flutter**. It helps users discover books, organize a personal library, track reading progress, read PDFs in-app, chat with an AI reading assistant, and stay motivated with calendar-aware reading reminders.
 
-The app uses a dark, book-inspired UI (warm gold accents on deep charcoal backgrounds) and is powered by **Firebase** (Auth, Firestore, Cloud Functions), **Google Gemini** for the AI assistant, **Google Calendar** for free-time detection, and **Resend** for transactional email.
+The app uses a dark, book-inspired UI (warm gold accents on deep charcoal backgrounds) and is powered by **Firebase** (Auth, Firestore, Cloud Functions), **Google Gemini** for the AI assistant, **Google Calendar** for free-time detection, and **Gmail SMTP** (via Cloud Functions + nodemailer) for transactional email.
 
 ---
 
@@ -28,7 +28,7 @@ The app uses a dark, book-inspired UI (warm gold accents on deep charcoal backgr
 | **Welcome screen** | Onboarding with illustration and "Get started" CTA |
 | **Email / password sign up** | First/last name + email + password; user profile saved to `users/{uid}` |
 | **Google sign-in / sign-up** | One-tap Google auth on web (Firebase popup) and mobile (`google_sign_in`) |
-| **Email verification** | 6-digit verification code emailed via Resend / Cloud Functions on sign-up |
+| **Email verification** | 6-digit verification code emailed via the `sendAuthEmail` Cloud Function (Gmail SMTP) on sign-up |
 | **Welcome email** | Branded welcome message sent after successful sign-up |
 | **Forgot password** | Inline dialog on login → password reset link delivered by `sendPasswordResetEmail` Cloud Function |
 | **Registered-email detection** | `email_index/{emailLower}` lookup prevents duplicate accounts and routes Google-only users back to "Continue with Google" |
@@ -119,7 +119,7 @@ The app uses a dark, book-inspired UI (warm gold accents on deep charcoal backgr
 | Framework | [Flutter](https://flutter.dev) (Dart SDK ^3.11.1) |
 | Backend | [Firebase](https://firebase.google.com) — Auth, Cloud Firestore, Cloud Functions (Node.js) |
 | AI | [Google Gemini](https://ai.google.dev) via REST (`gemini_chat_service.dart`) |
-| Email | [Resend](https://resend.com) called from Cloud Functions, with Firestore `mail` Trigger-Email fallback |
+| Email | Gmail SMTP via [nodemailer](https://nodemailer.com) inside Firebase Cloud Functions, with Firestore `mail` Trigger-Email fallback on web |
 | Google services | [google_sign_in](https://pub.dev/packages/google_sign_in), [googleapis](https://pub.dev/packages/googleapis) (Calendar), [extension_google_sign_in_as_googleapis_auth](https://pub.dev/packages/extension_google_sign_in_as_googleapis_auth) |
 | Notifications | [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications), [timezone](https://pub.dev/packages/timezone), [flutter_timezone](https://pub.dev/packages/flutter_timezone), [permission_handler](https://pub.dev/packages/permission_handler) |
 | Typography | [google_fonts](https://pub.dev/packages/google_fonts) (Outfit, Cormorant Garamond, Merriweather, Amiko) |
@@ -187,7 +187,7 @@ BooqlyProject/
 ├── functions/                          # Firebase Cloud Functions (Node.js)
 │   ├── index.js                        # sendAuthEmail, sendPasswordResetEmail
 │   ├── package.json
-│   └── .env.example                    # RESEND_API_KEY, EMAIL_FROM
+│   └── .env.example                    # GMAIL_USER, GMAIL_APP_PASSWORD, EMAIL_FROM
 │
 ├── firebase/                           # Setup docs + seed data
 │   ├── SETUP.md                        # End-to-end checklist
@@ -195,7 +195,6 @@ BooqlyProject/
 │   ├── FIRESTORE_SETUP.md
 │   ├── GOOGLE_CALENDAR_SETUP.md
 │   ├── GOOGLE_SIGNIN_SETUP.md
-│   ├── RESEND_DOMAIN.md
 │   └── seed/reading_preferences.json   # Seed for app_config/reading_preferences
 │
 ├── scripts/                            # PowerShell helpers (Windows dev)
@@ -227,10 +226,10 @@ BooqlyProject/
 | `SettingsPage.dart` | Google Calendar linking, reading-reminder toggle, and sign out. |
 | `ReadingPreferencesPage.dart` | Post-signup onboarding for genres, theme, and pace; seeds the initial Want-to-Read list. |
 | `BookDetailPage.dart` | Central hub for reading actions, progress, favorites, completion, and reviews. |
-| `email_service.dart` | Calls `sendAuthEmail` Cloud Function with HTML for verification codes, welcome, and password reset (Resend on the backend). |
+| `email_service.dart` | Calls `sendAuthEmail` Cloud Function with HTML for verification codes, welcome, book-completed, and password reset (Gmail SMTP on the backend). |
 | `calendar_service.dart` | Google OAuth + Calendar v3 read access; computes ≥25 min free slots. |
 | `reading_motivation_service.dart` | Schedules local notifications during free calendar windows. |
-| `functions/index.js` | `sendAuthEmail` and `sendPasswordResetEmail` callable functions backed by Resend. |
+| `functions/index.js` | `sendAuthEmail` and `sendPasswordResetEmail` callable functions backed by Gmail SMTP (nodemailer). |
 | `firestore.rules` | Auth-gated rules for books, feedbacks, users, preferences, email_index, and the `mail` queue. |
 
 ---
@@ -259,7 +258,7 @@ WelcomePage
 ```
 
 1. User opens the app → **Welcome** → **Login** or **Sign up** (email or **Continue with Google**).
-2. New sign-ups verify a 6-digit code emailed via Resend, then complete **Reading Preferences** onboarding.
+2. New sign-ups verify a 6-digit code emailed via the `sendAuthEmail` Cloud Function (Gmail SMTP), then complete **Reading Preferences** onboarding.
 3. After auth → **Home** with bottom navigation (Home · Library · Add · Ask AI · Settings).
 4. **Add (+)** → search by title (or future ISBN scan / manual entry).
 5. Select a book → **Book detail** → adjust progress, favorite, leave a review, or **Start reading**.
@@ -312,8 +311,8 @@ Firestore
 
 | Callable | Purpose |
 |----------|---------|
-| `sendAuthEmail` | Sends arbitrary transactional HTML email via Resend (verification, welcome) |
-| `sendPasswordResetEmail` | Generates a Firebase password reset link and emails it via Resend |
+| `sendAuthEmail` | Sends arbitrary transactional HTML email via Gmail SMTP (verification, welcome, book-completed) |
+| `sendPasswordResetEmail` | Generates a Firebase password reset link and emails it via Gmail SMTP |
 
 ---
 
@@ -328,7 +327,7 @@ Firestore
   - **Authentication** → Email/Password **and** Google enabled
   - **Cloud Firestore** with the rules in `firestore.rules` published
   - **Cloud Functions** (Blaze plan required to deploy)
-- A [Resend](https://resend.com) account with a verified sending domain
+- A Gmail account with 2-Step Verification enabled and a 16-character **App Password** (see `firebase/EMAIL_SETUP.md`)
 - A [Google Cloud](https://console.cloud.google.com) project with the **Calendar API** enabled and an **OAuth 2.0 Web client** for the same Firebase project
 - A [Google AI Studio](https://aistudio.google.com/app/apikey) Gemini API key
 
@@ -385,22 +384,22 @@ Copy-Item assets/config.env.example assets/config.env
 Copy-Item functions/.env.example functions/.env
 ```
 
-`assets/config.env` (loaded at app startup):
+`assets/config.env` (loaded at app startup — bundled into the APK, so **no secrets here**):
 
 ```env
 GEMINI_API_KEY=...                # Google AI Studio key for the AI chat
 GOOGLE_WEB_CLIENT_ID=...          # OAuth 2.0 Web client for Calendar linking
-EMAIL_FROM=Booqly <noreply@yourdomain.com>
 ```
 
-`functions/.env` (used by deployed Cloud Functions):
+`functions/.env` (used by deployed Cloud Functions — server-side only):
 
 ```env
-RESEND_API_KEY=...
-EMAIL_FROM=Booqly <noreply@yourdomain.com>
+GMAIL_USER=your.address@gmail.com
+GMAIL_APP_PASSWORD=abcdabcdabcdabcd        # 16-char app password from myaccount.google.com/apppasswords
+EMAIL_FROM=Booqly <your.address@gmail.com> # must match GMAIL_USER
 ```
 
-Use `./scripts/sync-env.ps1` to keep `EMAIL_FROM` in sync between the two files and `./scripts/sync-google-oauth.ps1` after changing the web client ID so `web/index.html` stays aligned.
+Use `./scripts/sync-env.ps1` to verify `functions/.env` has the required Gmail keys and `./scripts/sync-google-oauth.ps1` after changing the web client ID so `web/index.html` stays aligned.
 
 ---
 

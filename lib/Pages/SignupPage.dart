@@ -113,7 +113,24 @@ class _SignupPageState extends State<SignupPage> {
 
     if (!mounted) return;
 
+    // In debug builds we still want to proceed past a failed send so the
+    // signup flow can be exercised even when the email backend (Resend / Cloud
+    // Function) is not provisioned for this recipient. The dev code is shown
+    // prominently in the SnackBar.
     if (!sendResult.success) {
+      if (kDebugMode) {
+        setState(() {
+          _isLoading = false;
+          _awaitingVerification = true;
+          _pendingVerificationCode = code;
+          _codeExpiresAt = DateTime.now().add(const Duration(minutes: 15));
+        });
+        _showMessage(
+          'Email send failed (${sendResult.errorMessage ?? "unknown"}). '
+          'DEV bypass code: $code',
+        );
+        return;
+      }
       setState(() => _isLoading = false);
       _showMessage(
         sendResult.errorMessage ?? 'Could not send verification email.',
