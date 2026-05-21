@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -39,8 +39,10 @@ class AuthService {
 
   GoogleSignIn get googleSignIn {
     _googleSignIn ??= GoogleSignIn(
-      clientId: kIsWeb ? _webClientId : null,
       scopes: const ['email', 'profile'],
+      // Web: clientId. Android/iOS: serverClientId (Firebase Web client ID).
+      clientId: kIsWeb ? _webClientId : null,
+      serverClientId: kIsWeb ? null : _webClientId,
     );
     return _googleSignIn!;
   }
@@ -49,16 +51,18 @@ class AuthService {
   /// [GOOGLE_WEB_CLIENT_ID] is still used for Calendar linking on web.
   bool get hasGoogleWebConfig => kIsWeb || (_webClientId != null);
 
-  Future<bool> emailIsRegistered(String email) async {
+  /// Returns registered state, or `null` when Firestore could not be reached.
+  Future<bool?> emailIsRegistered(String email) async {
     try {
       final doc = await _firestore
           .collection('email_index')
           .doc(_normalizeEmail(email))
-          .get();
+          .get(const GetOptions(source: Source.serverAndCache))
+          .timeout(const Duration(seconds: 12));
       return doc.exists;
     } catch (e) {
       debugPrint('AuthService.emailIsRegistered: $e');
-      return false;
+      return null;
     }
   }
 
@@ -83,6 +87,19 @@ class AuthService {
 
   String _mapGoogleSignInError(Object e) {
     final text = e.toString().toLowerCase();
+    if (text.contains('access_denied') ||
+        text.contains('org_internal') ||
+        text.contains('invalid_client_id') ||
+        (text.contains('403') && text.contains('access'))) {
+      return 'This Google account is not allowed to sign in yet.\n\n'
+          'Your Google Cloud OAuth app is probably in **Testing** mode, which '
+          'only permits accounts listed as test users.\n\n'
+          'Fix (project booqlyapp-83777): open Google Cloud Console → '
+          'APIs & Services → OAuth consent screen → either add this Gmail under '
+          'Test users, or publish the app to **Production** so any Google '
+          'account can sign in.\n\n'
+          'Details: firebase/GOOGLE_SIGNIN_SETUP.md';
+    }
     if (text.contains('invalid_client') ||
         text.contains('no registered origin') ||
         text.contains('origin_mismatch')) {
@@ -95,6 +112,21 @@ class AuthService {
     }
     if (text.contains('popup') && text.contains('block')) {
       return 'Google sign-in popup was blocked. Allow popups for localhost in your browser.';
+    }
+    if (text.contains('apiexception: 10') ||
+        text.contains('developer_error') ||
+        text.contains('sign_in_failed')) {
+      return 'Google sign-in: SHA-1 mismatch for this debug build.\n\n'
+          'Firebase → Project settings → Android (com.example.booqly) → '
+          'add SHA-1:\n'
+          'F9:1B:F9:D5:DF:E7:1D:9F:CE:83:C9:C0:43:C7:CB:17:65:F0:F4:9E\n\n'
+          'Enable Google sign-in, download google-services.json '
+          '(certificate_hash must be f91bf9d5…f49e), replace android/app/, '
+          'then flutter clean && flutter run.\n'
+          'Details: firebase/GOOGLE_SIGNIN_SETUP.md';
+    }
+    if (text.contains('network') || text.contains('socket')) {
+      return 'Network error during Google sign-in. Check Wi‑Fi and try again.';
     }
     return _mapError(e);
   }
@@ -112,6 +144,8 @@ class AuthService {
         'account-exists-with-different-credential' =>
           'This email uses password sign-in. Log in with email and password.',
         'popup-closed-by-user' => 'Google sign-in cancelled.',
+        'too-many-requests' =>
+          'Too many attempts. Wait a few minutes and try again.',
         _ => e.message ?? 'Authentication failed.',
       };
     }
@@ -122,6 +156,17 @@ class AuthService {
       return e.message ?? 'Database error: ${e.code}';
     }
     return e.toString();
+  }
+
+  /// Firestore rules allow create but not update on [email_index].
+  Future<void> _ensureEmailIndexed(String email) async {
+    final ref =
+        _firestore.collection('email_index').doc(_normalizeEmail(email));
+    final snap = await ref.get();
+    if (snap.exists) return;
+    await ref.set({
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> _createUserDocument({
@@ -138,9 +183,7 @@ class AuthService {
     });
 
     if (email.isNotEmpty) {
-      await _firestore.collection('email_index').doc(_normalizeEmail(email)).set({
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await _ensureEmailIndexed(email);
     }
 
     await _preferencesService.createEmptyPreferences(uid);
@@ -212,6 +255,12 @@ class AuthService {
       }
       if (e.code == 'invalid-credential') {
         final registered = await emailIsRegistered(trimmedEmail);
+        if (registered == null) {
+          return const AuthResult(
+            errorMessage:
+                'Could not verify account (network). Check connection and try again.',
+          );
+        }
         return AuthResult(
           errorMessage: registered ? 'Wrong password' : 'Wrong email',
         );
@@ -220,6 +269,42 @@ class AuthService {
     } catch (e) {
       debugPrint('AuthService.signIn: $e');
       return AuthResult(errorMessage: _mapError(e));
+    }
+  }
+
+  /// Sends password-reset email (Resend via Cloud Function, or Firebase fallback).
+  Future<String?> sendPasswordResetEmail(String email) async {
+    final trimmedEmail = email.trim();
+    if (!isValidEmailFormat(trimmedEmail)) {
+      return 'Please enter a valid email address.';
+    }
+
+    final result = await EmailService().sendPasswordResetEmail(
+      toEmail: trimmedEmail,
+    );
+    if (result.success) return null;
+
+    final code = result.functionsErrorCode;
+    final shouldFallback = code == 'not-found' ||
+        code == 'unavailable' ||
+        (result.errorMessage?.toLowerCase().contains('deploy') ?? false);
+
+    if (!shouldFallback) {
+      return result.errorMessage ?? 'Could not send reset email.';
+    }
+
+    debugPrint(
+      'AuthService: Cloud Function unavailable, using Firebase reset email.',
+    );
+    try {
+      await _auth.sendPasswordResetEmail(email: trimmedEmail);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('AuthService.sendPasswordResetEmail fallback: $e');
+      return _mapError(e);
+    } catch (e) {
+      debugPrint('AuthService.sendPasswordResetEmail fallback: $e');
+      return _mapError(e);
     }
   }
 
@@ -235,7 +320,10 @@ class AuthService {
   }
 
   /// Google sign-in / sign-up. Web uses Firebase popup; mobile uses [google_sign_in].
-  Future<AuthResult> signInWithGoogle() async {
+  ///
+  /// [forceAccountPicker] signs out of Google first so users can choose another
+  /// account (useful on sign-up).
+  Future<AuthResult> signInWithGoogle({bool forceAccountPicker = false}) async {
     try {
       if (kIsWeb) {
         final result = await _auth.signInWithPopup(GoogleAuthProvider());
@@ -246,10 +334,21 @@ class AuthService {
         );
       }
 
-      if (!hasGoogleWebConfig) {
+      if (_webClientId == null || _webClientId!.isEmpty) {
         return const AuthResult(
-          errorMessage: 'Google sign-in is not configured on this device.',
+          errorMessage:
+              'Google sign-in is not configured. Add GOOGLE_WEB_CLIENT_ID to '
+              'assets/config.env (Firebase → Authentication → Google → Web client ID), '
+              'then restart the app.',
         );
+      }
+
+      if (forceAccountPicker) {
+        try {
+          await googleSignIn.signOut();
+        } catch (e) {
+          debugPrint('AuthService.signInWithGoogle signOut: $e');
+        }
       }
 
       final googleUser = await googleSignIn.signIn();
@@ -294,9 +393,10 @@ class AuthService {
 
     final firebaseNewUser = result.additionalUserInfo?.isNewUser ?? false;
     final doc = await _firestore.collection('users').doc(user.uid).get();
-    final isNewUser = firebaseNewUser || !doc.exists;
+    final needsProfile = !doc.exists;
+    final isNewUser = firebaseNewUser || needsProfile;
 
-    if (isNewUser) {
+    if (needsProfile) {
       final name = _splitName(displayName ?? user.displayName);
       final resolvedEmail = email ?? user.email ?? '';
 
@@ -309,6 +409,8 @@ class AuthService {
         );
       } catch (e) {
         debugPrint('AuthService.signInWithGoogle profile write failed: $e');
+        final message = _mapError(e);
+        return AuthResult(user: user, isNewUser: true, errorMessage: message);
       }
 
       try {

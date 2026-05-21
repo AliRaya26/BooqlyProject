@@ -10,7 +10,6 @@ import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
 // ─────────────────────────────────────────────────────────────
 // COLORS
@@ -231,22 +230,68 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Future<void> _sendBookCompletedEmail(User user) async {
     final email = user.email?.trim();
-    if (email == null || email.isEmpty) return;
+    if (email == null || email.isEmpty) {
+      debugPrint(
+        'BookDetailPage: skipping completion email — signed-in user has no email.',
+      );
+      _showCompletionEmailMessage(
+        'No email on this account, so no congratulations email was sent.',
+      );
+      return;
+    }
 
-    final firstName = await _readerFirstName(user.uid, user);
-    final result = await _emailService.sendBookCompletedEmail(
-      toEmail: email,
-      firstName: firstName,
-      bookTitle: widget.book.title,
-      author: widget.book.author,
-      totalPages: widget.book.totalPages,
-    );
+    try {
+      final firstName = await _readerFirstName(user.uid, user);
+      debugPrint('BookDetailPage: sending completion email to $email');
 
-    if (!result.success) {
+      final result = await _emailService.sendBookCompletedEmail(
+        toEmail: email,
+        firstName: firstName,
+        bookTitle: widget.book.title,
+        author: widget.book.author,
+        totalPages: widget.book.totalPages,
+      );
+
+      if (result.success) {
+        debugPrint('BookDetailPage: completion email sent to $email');
+        _showCompletionEmailMessage(
+          'Congratulations email sent to $email.',
+          isError: false,
+        );
+        return;
+      }
+
       debugPrint(
         'BookDetailPage: completion email failed: ${result.errorMessage}',
       );
+      _showCompletionEmailMessage(
+        result.errorMessage ??
+            'Could not send congratulations email. See debug log for details.',
+      );
+    } catch (e, stack) {
+      debugPrint('BookDetailPage._sendBookCompletedEmail error: $e\n$stack');
+      _showCompletionEmailMessage(
+        'Could not send congratulations email: $e',
+      );
     }
+  }
+
+  void _showCompletionEmailMessage(String message, {bool isError = true}) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.surface,
+        duration: Duration(seconds: isError ? 8 : 4),
+        content: Text(
+          message,
+          style: GoogleFonts.outfit(
+            color: isError ? Colors.redAccent : AppColors.textPrimary,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> completeBook() async {

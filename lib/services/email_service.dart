@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 /// Firestore mail queue (Trigger Email extension). Mobile: Resend API directly.
 class EmailService {
   static const _callableName = 'sendAuthEmail';
+  static const _passwordResetCallableName = 'sendPasswordResetEmail';
   static const _mailCollection = 'mail';
   static const _resendUrl = 'https://api.resend.com/emails';
 
@@ -32,6 +33,65 @@ class EmailService {
   String generateVerificationCode() {
     final rng = Random.secure();
     return (100000 + rng.nextInt(900000)).toString();
+  }
+
+  /// Password reset via Cloud Function (Resend + Firebase Admin reset link).
+  Future<EmailSendResult> sendPasswordResetEmail({
+    required String toEmail,
+  }) async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable(
+        _passwordResetCallableName,
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      await callable.call<Map<String, dynamic>>({
+        'email': toEmail.trim(),
+      });
+
+      return const EmailSendResult(success: true, delivered: true);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint(
+        'EmailService.sendPasswordResetEmail: ${e.code} ${e.message}',
+      );
+      return EmailSendResult(
+        success: false,
+        errorMessage: _mapPasswordResetFunctionsError(e),
+        functionsErrorCode: e.code,
+      );
+    } catch (e) {
+      debugPrint('EmailService.sendPasswordResetEmail: $e');
+      return EmailSendResult(
+        success: false,
+        errorMessage:
+            'Could not send reset email. Deploy Cloud Functions (scripts/deploy-email.ps1) and try again.',
+      );
+    }
+  }
+
+  String? _mapPasswordResetFunctionsError(FirebaseFunctionsException e) {
+    final msg = e.message?.trim();
+    if (msg != null &&
+        msg.isNotEmpty &&
+        msg != 'internal' &&
+        msg != 'NOT_FOUND') {
+      return msg;
+    }
+    return switch (e.code) {
+      'not-found' => 'No Booqly account found for this email.',
+      'failed-precondition' => 'This account cannot reset password by email.',
+      'invalid-argument' => 'Please enter a valid email address.',
+      'unavailable' =>
+        'Reset email service is not deployed. Run scripts/deploy-email.ps1',
+      'internal' =>
+        'Reset email service error. Run scripts/deploy-email.ps1 and try again.',
+      _ =>
+        _mapFunctionsError(e) ?? 'Could not send reset email (${e.code}).',
+    };
   }
 
   Future<EmailSendResult> sendVerificationCode({
@@ -91,7 +151,7 @@ class EmailService {
         ? '<p style="color:#888580;margin:0;">by ${_escapeHtml(author)}</p>'
         : '';
     final pagesLine = totalPages > 0
-        ? '<p style="margin:16px 0 0;color:#D4A96A;font-size:15px;">${totalPages} pages read</p>'
+        ? '<p style="margin:16px 0 0;color:#D4A96A;font-size:15px;">$totalPages pages read</p>'
         : '';
 
     return _send(
@@ -174,7 +234,26 @@ class EmailService {
             _webSetupHint,
       );
     }
-    return _sendViaResend(to: to, subject: subject, html: html);
+    final resend = await _sendViaResend(to: to, subject: subject, html: html);
+    if (resend.success) return resend;
+
+    // Tablet/phone: Resend may fail (key, domain). Fall back to Cloud Function.
+    final callable = await _sendViaCallable(
+      to: to,
+      subject: subject,
+      html: html,
+    );
+    if (callable.success) {
+      return const EmailSendResult(success: true, delivered: true);
+    }
+
+    return EmailSendResult(
+      success: false,
+      errorMessage:
+          resend.errorMessage ??
+          callable.errorMessage ??
+          'Could not send email. Check connection and firebase/EMAIL_SETUP.md',
+    );
   }
 
   bool _shouldFallbackToFirestoreMail(String? code) {

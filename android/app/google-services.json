@@ -12,7 +12,28 @@
           "package_name": "com.example.booqly"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "87414724762-en4k0jlg4bu1la0ina6lmj5jli2g3m9d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.booqly",
+            "certificate_hash": "dfb13c0dec8f86a0e7649462b9d05bdd8c4691e8"
+          }
+        },
+        {
+          "client_id": "87414724762-juk26i5os6v50qcl88pq7he22t11belf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.booqly",
+            "certificate_hash": "f91bf9d5dfe71d9fce83c9c043c7cb1765f0f49e"
+          }
+        },
+        {
+          "client_id": "87414724762-uvhv3dqd5ib1192rgb31tthk12bp20dg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDys4sD_y_YSfBbHkvLm1BRGTLZ2nqSvXA"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "87414724762-uvhv3dqd5ib1192rgb31tthk12bp20dg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "87414724762-i1oinjvq1l5dbto337tecen9b9jfv0j6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.booqly"
+              }
+            }
+          ]
         }
       }
     }

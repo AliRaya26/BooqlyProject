@@ -2,21 +2,6 @@ import 'package:booqly/Pages/LoginPage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-void main() => runApp(const ReadlyApp());
-
-class ReadlyApp extends StatelessWidget {
-  const ReadlyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: const Color(0xFF0E0C0A)),
-      home: const WelcomePage(),
-    );
-  }
-}
-
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
 
@@ -28,19 +13,21 @@ class WelcomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            children: [
-              const Spacer(),
-
-              // ── Illustration ──
-              const _BookIllustration(),
-
-              // const SizedBox(height: 28),
-
-              // ── Headline ──
-              RichText(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth > 600 ? 480 : 560,
+                  ),
+                  child: Column(
+                    children: [
+                      const Spacer(),
+                      const _BookIllustration(),
+                      RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
                   style: GoogleFonts.merriweather (
@@ -72,39 +59,42 @@ class WelcomePage extends StatelessWidget {
 
               const Spacer(),
 
-              // ── CTA Button ──
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginPage(),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: _gold,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Get started',
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0E0C0A),
-                      letterSpacing: 0.3,
-                    ),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LoginPage(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _gold,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            'Get started',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF0E0C0A),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 32),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

@@ -216,7 +216,16 @@ class PreferencesService {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || !context.mounted) return;
 
-    final completed = await hasCompletedPreferences(uid);
+    bool completed = false;
+    try {
+      completed = await hasCompletedPreferences(uid)
+          .timeout(const Duration(seconds: 12));
+    } catch (e) {
+      debugPrint('PreferencesService.navigateAfterLogin: $e');
+      // Auth succeeded; don't block the user on slow/offline Firestore.
+      completed = false;
+    }
+
     if (!context.mounted) return;
 
     if (completed) {

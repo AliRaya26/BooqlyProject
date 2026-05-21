@@ -3,7 +3,6 @@ import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/Pages/SearchByTitlePage.dart';
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';

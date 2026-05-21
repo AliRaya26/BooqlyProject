@@ -14,6 +14,7 @@
 
 1. [Firebase → Authentication → Sign-in method](https://console.firebase.google.com/project/booqlyapp-83777/authentication/providers) → enable **Google**.
 2. **Authentication → Settings → Authorized domains** → ensure **localhost** is listed.
+3. [OAuth consent screen → Publish app](https://console.cloud.google.com/apis/credentials/consent?project=booqlyapp-83777) to **Production** so **any** Gmail can sign in (not only Test users). See `GOOGLE_SIGNIN_SETUP.md`.
 
 The app uses Firebase **signInWithPopup** on web (not the OAuth Web client in `config.env`). Hot restart (**R**) after enabling.
 
@@ -25,7 +26,7 @@ Use the Web client ID in `config.env` (must start with **`87414724762-`** for bo
 After updating `config.env`, run `.\scripts\sync-google-oauth.ps1` so `web/index.html` stays in sync.
 
 1. [Enable Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=booqlyapp-83777)
-2. [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent?project=booqlyapp-83777) → add scope `calendar.readonly` + **Test users** (your Gmail)
+2. [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent?project=booqlyapp-83777) → add scope `calendar.readonly`. For **sign-in for everyone**, publish the app (see `GOOGLE_SIGNIN_SETUP.md`). Test users alone only allow listed Gmail accounts.
 3. [Credentials → Web client](https://console.cloud.google.com/apis/credentials?project=booqlyapp-83777) → **Authorized JavaScript origins** (add all of these):
    ```
    http://localhost:54141
