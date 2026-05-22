@@ -1,5 +1,4 @@
 import 'package:booqly/Pages/BookDetailPage.dart';
-import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/preferences_service.dart';
@@ -45,7 +44,7 @@ Widget buildCover(
       width: width,
       height: height,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) {
+      errorBuilder: (_, _, _) {
         return Container(
           width: width,
           height: height,
@@ -61,7 +60,7 @@ Widget buildCover(
     width: width,
     height: height,
     fit: BoxFit.cover,
-    errorBuilder: (_, __, ___) {
+    errorBuilder: (_, _, _) {
       return Container(
         width: width,
         height: height,

@@ -208,7 +208,7 @@ class EmailService {
     final coverCell = hasCover
         ? '''
                 <td valign="top" width="96" style="padding:18px 0 18px 18px;">
-                  <img src="${_escapeHtml(cover)}" alt="${title} cover" width="80" height="120" style="display:block;width:80px;height:120px;border-radius:6px;border:1px solid #2A2520;object-fit:cover;background:#0E0C0A;" />
+                  <img src="${_escapeHtml(cover)}" alt="$title cover" width="80" height="120" style="display:block;width:80px;height:120px;border-radius:6px;border:1px solid #2A2520;object-fit:cover;background:#0E0C0A;" />
                 </td>'''
         : '';
     final bookCellPadding = hasCover ? '18px' : '20px 24px';

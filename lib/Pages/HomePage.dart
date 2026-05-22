@@ -70,7 +70,7 @@ class BookCover extends StatelessWidget {
       child = Image.network(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+        errorBuilder: (_, _, _) => Container(
           color: AppColors.surface,
           child: const Icon(Icons.broken_image),
         ),
@@ -79,7 +79,7 @@ class BookCover extends StatelessWidget {
       child = Image.file(
         File(url),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+        errorBuilder: (_, _, _) => Container(
           color: AppColors.surface,
           child: const Icon(Icons.broken_image),
         ),
@@ -1913,7 +1913,7 @@ class _Bar extends StatelessWidget {
                   boxShadow: selected
                       ? [
                           BoxShadow(
-                            color: AppColors.gold.withOpacity(0.4),
+                            color: AppColors.gold.withValues(alpha: 0.4),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),

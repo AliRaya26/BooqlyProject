@@ -537,7 +537,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         ? Image.network(
                             widget.book.coverUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
+                            errorBuilder: (_, _, _) {
                               return Container(
                                 color: AppColors.surface,
                                 child: const Icon(
@@ -551,7 +551,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         : Image.file(
                             File(widget.book.coverUrl),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
+                            errorBuilder: (_, _, _) {
                               return Container(
                                 color: AppColors.surface,
                                 child: const Icon(

@@ -366,7 +366,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                       ),
                     ),
                     Positioned(
@@ -417,7 +417,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
       child: Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.55), shape: BoxShape.circle),
+            color: Colors.black.withValues(alpha: 0.55), shape: BoxShape.circle),
         child: Icon(icon, color: Colors.white, size: 16),
       ),
     );

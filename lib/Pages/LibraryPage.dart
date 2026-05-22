@@ -56,7 +56,7 @@ class BookCover extends StatelessWidget {
       return Image.network(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
+        errorBuilder: (_, _, _) {
           return Container(
             color: AppColors.surface,
             child: const Icon(Icons.broken_image),
@@ -68,7 +68,7 @@ class BookCover extends StatelessWidget {
     return Image.file(
       File(url), // IMPORTANT for your manual entry case
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) {
+      errorBuilder: (_, _, _) {
         return Container(
           color: AppColors.surface,
           child: const Icon(Icons.broken_image),
