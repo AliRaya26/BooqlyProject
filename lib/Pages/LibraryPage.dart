@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -36,6 +38,46 @@ class AppColors {
   static const spineGreen = Color(0xFF4A9E7A);
 }
 
+class BookCover extends StatelessWidget {
+  final String url;
+
+  const BookCover({super.key, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    if (url.trim().isEmpty) {
+      return Container(
+        color: AppColors.surface,
+        child: const Icon(Icons.menu_book_rounded),
+      );
+    }
+
+    if (url.startsWith('http')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return Container(
+            color: AppColors.surface,
+            child: const Icon(Icons.broken_image),
+          );
+        },
+      );
+    }
+
+    return Image.file(
+      File(url), // IMPORTANT for your manual entry case
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return Container(
+          color: AppColors.surface,
+          child: const Icon(Icons.broken_image),
+        );
+      },
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // LIBRARY PAGE
 // Displays:
@@ -58,6 +100,21 @@ class LibraryPage extends StatefulWidget {
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
+// Widget buildCover(String url) {
+//   if (url.isEmpty) {
+//     return Container(
+//       color: AppColors.surface,
+//       child: const Icon(Icons.menu_book_rounded),
+//     );
+//   }
+
+//   if (url.startsWith('http')) {
+//     return Image.network(url, fit: BoxFit.cover);
+//   }
+
+//   return Image.asset(url, fit: BoxFit.cover);
+// }
+
 class _LibraryPageState extends State<LibraryPage>
     with SingleTickerProviderStateMixin {
   // TAB CONTROLLER
@@ -73,6 +130,8 @@ class _LibraryPageState extends State<LibraryPage>
 
   // LOADING
   bool _isLoading = true;
+
+  bool _showSuggestions = true;
 
   List<BookModel> _readingBooks = [];
   List<BookModel> _wantToReadBooks = [];
@@ -212,10 +271,10 @@ class _LibraryPageState extends State<LibraryPage>
   }
 
   Set<String> get _libraryBookIds => {
-        ..._readingBooks.map((b) => b.id),
-        ..._wantToReadBooks.map((b) => b.id),
-        ..._completedBooks.map((b) => b.id),
-      };
+    ..._readingBooks.map((b) => b.id),
+    ..._wantToReadBooks.map((b) => b.id),
+    ..._completedBooks.map((b) => b.id),
+  };
 
   Future<void> _refreshSuggestions() async {
     final user = _auth.currentUser;
@@ -363,7 +422,8 @@ class _LibraryPageState extends State<LibraryPage>
           children: [
             _buildTopBar(),
             _buildTabBar(),
-            if (_preferredGenres.isNotEmpty) _buildSuggestedSection(),
+            if (_preferredGenres.isNotEmpty && _showSuggestions)
+              _buildSuggestedSection(),
             _buildCategoryChips(),
 
             Expanded(child: _buildGrid()),
@@ -414,6 +474,28 @@ class _LibraryPageState extends State<LibraryPage>
                 child: const Icon(Icons.delete_rounded, color: Colors.red),
               ),
             ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _showSuggestions = !_showSuggestions;
+              });
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _showSuggestions
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: AppColors.textMuted,
+                size: 18,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -487,40 +569,41 @@ class _LibraryPageState extends State<LibraryPage>
                   child: CircularProgressIndicator(color: AppColors.gold),
                 )
               : _suggestedBooks.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 22),
-                        child: Text(
-                          'No new suggestions — explore Search to add books in your favorite genres.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Text(
+                      'No new suggestions — explore Search to add books in your favorite genres.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
                       ),
-                    )
-                  : ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                      itemCount: _suggestedBooks.length,
-                      separatorBuilder: (context, index) => const SizedBox(width: 14),
-                      itemBuilder: (_, i) {
-                        final book = _suggestedBooks[i];
-                        return _SuggestedBookCard(
-                          book: book,
-                          onOpen: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => BookDetailPage(book: book),
-                              ),
-                            );
-                          },
-                          onAdd: () => _addSuggestedBook(book),
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  itemCount: _suggestedBooks.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 14),
+                  itemBuilder: (_, i) {
+                    final book = _suggestedBooks[i];
+                    return _SuggestedBookCard(
+                      book: book,
+                      onOpen: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookDetailPage(book: book),
+                          ),
                         );
                       },
-                    ),
+                      onAdd: () => _addSuggestedBook(book),
+                    );
+                  },
+                ),
         ),
         const SizedBox(height: 8),
       ],
@@ -724,17 +807,7 @@ class _SuggestedBookCard extends StatelessWidget {
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        book.coverUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.surface,
-                          child: const Icon(
-                            Icons.menu_book_rounded,
-                            color: Colors.white54,
-                          ),
-                        ),
-                      ),
+                      child: BookCover(url: book.coverUrl)
                     ),
                   ),
                   Positioned(
@@ -774,10 +847,7 @@ class _SuggestedBookCard extends StatelessWidget {
               book.category,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                color: AppColors.gold,
-              ),
+              style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gold),
             ),
           ],
         ),
@@ -825,21 +895,7 @@ class _BookGridItem extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
 
-                    child: Image.network(
-                      book.coverUrl,
-                      fit: BoxFit.cover,
-
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: AppColors.surface,
-
-                          child: const Icon(
-                            Icons.menu_book_rounded,
-                            color: Colors.white54,
-                          ),
-                        );
-                      },
-                    ),
+                    child: BookCover(url: book.coverUrl)
                   ),
                 ),
 

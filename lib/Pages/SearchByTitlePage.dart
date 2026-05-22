@@ -1,10 +1,12 @@
 import 'package:booqly/Pages/BookDetailPage.dart';
+import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 
 // ─────────────────────────────────────────────────────────────
 // COLORS
@@ -23,6 +25,53 @@ class AppColors {
   static const gold = Color(0xFFD4A96A);
 }
 
+Widget buildCover(
+  String url, {
+  double width = double.infinity,
+  double height = double.infinity,
+}) {
+  if (url.trim().isEmpty) {
+    return Container(
+      width: width,
+      height: height,
+      color: AppColors.surface,
+      child: const Icon(Icons.menu_book_rounded),
+    );
+  }
+
+  if (url.startsWith('http')) {
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return Container(
+          width: width,
+          height: height,
+          color: AppColors.surface,
+          child: const Icon(Icons.broken_image),
+        );
+      },
+    );
+  }
+
+  return Image.file(
+    File(url),
+    width: width,
+    height: height,
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) {
+      return Container(
+        width: width,
+        height: height,
+        color: AppColors.surface,
+        child: const Icon(Icons.broken_image),
+      );
+    },
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // CATEGORY MODEL
 // ─────────────────────────────────────────────────────────────
@@ -31,10 +80,7 @@ class BookCategory {
   final String name;
   final List<BookModel> books;
 
-  const BookCategory({
-    required this.name,
-    required this.books,
-  });
+  const BookCategory({required this.name, required this.books});
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -122,10 +168,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
     }
 
     final categories = grouped.entries.map((entry) {
-      return BookCategory(
-        name: entry.key,
-        books: entry.value,
-      );
+      return BookCategory(name: entry.key, books: entry.value);
     }).toList();
 
     if (_preferredGenres.isEmpty) return categories;
@@ -167,39 +210,37 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.gold,
-                      ),
+                      child: CircularProgressIndicator(color: AppColors.gold),
                     )
                   : _filtered.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 40),
-                          itemCount: _filtered.length +
-                              (_preferredGenres.isNotEmpty && _query.isEmpty
-                                  ? 1
-                                  : 0),
-                          itemBuilder: (_, i) {
-                            if (_preferredGenres.isNotEmpty &&
-                                _query.isEmpty &&
-                                i == 0) {
-                              return _PickedForYouBanner(
-                                genres: _preferredGenres,
-                              );
-                            }
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      itemCount:
+                          _filtered.length +
+                          (_preferredGenres.isNotEmpty && _query.isEmpty
+                              ? 1
+                              : 0),
+                      itemBuilder: (_, i) {
+                        if (_preferredGenres.isNotEmpty &&
+                            _query.isEmpty &&
+                            i == 0) {
+                          return _PickedForYouBanner(genres: _preferredGenres);
+                        }
 
-                            final index = _preferredGenres.isNotEmpty &&
-                                    _query.isEmpty
-                                ? i - 1
-                                : i;
+                        final index =
+                            _preferredGenres.isNotEmpty && _query.isEmpty
+                            ? i - 1
+                            : i;
 
-                            return _CategorySection(
-                              category: _filtered[index],
-                              isPreferred: _preferredGenres
-                                  .contains(_filtered[index].name),
-                            );
-                          },
-                        ),
+                        return _CategorySection(
+                          category: _filtered[index],
+                          isPreferred: _preferredGenres.contains(
+                            _filtered[index].name,
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -305,9 +346,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 
                       border: InputBorder.none,
 
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
@@ -351,21 +390,14 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
         mainAxisAlignment: MainAxisAlignment.center,
 
         children: [
-          Icon(
-            Icons.search_off_rounded,
-            size: 48,
-            color: AppColors.textMuted,
-          ),
+          Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
 
           const SizedBox(height: 12),
 
           Text(
             'No books found',
 
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              color: AppColors.textMuted,
-            ),
+            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMuted),
           ),
 
           const SizedBox(height: 6),
@@ -373,10 +405,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
           Text(
             'Try a different title or author',
 
-            style: GoogleFonts.outfit(
-              fontSize: 12,
-              color: AppColors.textMuted,
-            ),
+            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -435,10 +464,7 @@ class _PickedForYouBanner extends StatelessWidget {
 }
 
 class _CategorySection extends StatelessWidget {
-  const _CategorySection({
-    required this.category,
-    this.isPreferred = false,
-  });
+  const _CategorySection({required this.category, this.isPreferred = false});
 
   final BookCategory category;
   final bool isPreferred;
@@ -522,9 +548,7 @@ class _CategorySection extends StatelessWidget {
             separatorBuilder: (context, index) => const SizedBox(width: 14),
 
             itemBuilder: (_, i) {
-              return _BookCard(
-                book: category.books[i],
-              );
+              return _BookCard(book: category.books[i]);
             },
           ),
         ),
@@ -538,9 +562,7 @@ class _CategorySection extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 
 class _BookCard extends StatelessWidget {
-  const _BookCard({
-    required this.book,
-  });
+  const _BookCard({required this.book});
 
   final BookModel book;
 
@@ -550,9 +572,7 @@ class _BookCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => BookDetailPage(book: book),
-          ),
+          MaterialPageRoute(builder: (_) => BookDetailPage(book: book)),
         );
       },
 
@@ -570,63 +590,7 @@ class _BookCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
 
-                child: Image.network(
-                  book.coverUrl,
-
-                  width: 120,
-                  height: 170,
-
-                  fit: BoxFit.cover,
-
-                  // LOADING
-                  loadingBuilder: (
-                    context,
-                    child,
-                    loadingProgress,
-                  ) {
-                    if (loadingProgress == null) {
-                      return child;
-                    }
-
-                    return Container(
-                      width: 120,
-                      height: 170,
-
-                      color: AppColors.surface,
-
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.gold,
-                        ),
-                      ),
-                    );
-                  },
-
-                  // ERROR
-                  errorBuilder: (
-                    context,
-                    error,
-                    stackTrace,
-                  ) {
-                    return Container(
-                      width: 120,
-                      height: 170,
-
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-
-                      child: const Center(
-                        child: Icon(
-                          Icons.broken_image_rounded,
-                          color: Colors.white54,
-                          size: 32,
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                child: buildCover(book.coverUrl, width: 120, height: 170),
               ),
             ),
 

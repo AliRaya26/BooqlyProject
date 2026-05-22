@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:booqly/Pages/BookChatPage.dart';
 import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/Pages/SearchByTitlePage.dart';
@@ -41,6 +43,62 @@ class AppColors {
   static const spineBlue = Color(0xFF5B8DD9);
   static const spinePurple = Color(0xFF9B7FD4);
   static const spineGreen = Color(0xFF4A9E7A);
+}
+
+class BookCover extends StatelessWidget {
+  final String url;
+  final double width;
+  final double height;
+
+  const BookCover({
+    super.key,
+    required this.url,
+    this.width = 100,
+    this.height = 150,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+
+    if (url.trim().isEmpty) {
+      child = Container(
+        color: AppColors.surface,
+        child: const Icon(Icons.menu_book_rounded),
+      );
+    } else if (url.startsWith('http')) {
+      child = Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: AppColors.surface,
+          child: const Icon(Icons.broken_image),
+        ),
+      );
+    } else {
+      child = Image.file(
+        File(url),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: AppColors.surface,
+          child: const Icon(Icons.broken_image),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(width: width, height: height, child: child),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -349,7 +407,10 @@ class _HomePageState extends State<HomePage> {
               coverUrl: bookData['coverUrl'] ?? '',
               pdfUrl: bookData['pdfUrl'] ?? '',
               totalPages: bookData['totalPages'] ?? 0,
-              progress: (libraryData['progress'] ?? 0).toDouble().clamp(0.0, 1.0),
+              progress: (libraryData['progress'] ?? 0).toDouble().clamp(
+                0.0,
+                1.0,
+              ),
               currentPage: libraryData['currentPage'] ?? 0,
             );
           });
@@ -596,7 +657,10 @@ void _showAddBottomSheet(BuildContext context) {
             label: 'Manual entry',
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualEntryPage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManualEntryPage()),
+              );
             },
           ),
           const SizedBox(height: 8),
@@ -916,11 +980,10 @@ class _ContinueReadingCard extends StatelessWidget {
                     onTap: () => _openDetail(context),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        book.coverUrl,
+                      child: BookCover(
+                        url: book.coverUrl,
                         width: 68,
                         height: 96,
-                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
@@ -1248,14 +1311,13 @@ class _WantToReadSection extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 86,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: AppColors.coverAmber,
-                          borderRadius: BorderRadius.circular(10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: BookCover(
+                          url: book.coverUrl,
+                          width: 86,
+                          height: 120,
                         ),
-                        child: Image.network(book.coverUrl, fit: BoxFit.cover),
                       ),
                       const SizedBox(height: 8),
                       Text(
