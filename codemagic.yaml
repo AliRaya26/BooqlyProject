@@ -1,0 +1,37 @@
+# iOS build for testing on a physical iPhone (unsigned .ipa).
+# Connect this repo at https://codemagic.io → Applications → Add application → GitHub → BooqlyProject
+#
+# Required Codemagic environment variables (App settings → Environment variables):
+#   GEMINI_API_KEY          — same as in your local assets/config.env
+#   GOOGLE_WEB_CLIENT_ID    — Firebase Auth → Google → Web client ID (87414724762-...)
+# Optional (if you use email in the app):
+#   RESEND_API_KEY, EMAIL_FROM
+#
+# After the build: download app.ipa → install with Sideloadly on Windows.
+
+workflows:
+  ios-unsigned:
+    name: iOS unsigned (iPhone test)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      vars:
+        # Non-secret defaults; override secrets in the Codemagic UI.
+        EMAIL_FROM: "Booqly <onboarding@resend.dev>"
+    scripts:
+      - name: Create assets/config.env for CI
+        script: chmod +x scripts/prepare_config_env.sh && ./scripts/prepare_config_env.sh
+      - name: Flutter dependencies
+        script: flutter pub get
+      - name: Build unsigned iOS release
+        script: |
+          flutter build ios --release --no-codesign
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -qr app.ipa Payload
+          ls -la app.ipa
+    artifacts:
+      - build/ios/iphoneos/app.ipa

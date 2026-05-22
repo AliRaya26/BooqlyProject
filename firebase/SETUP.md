@@ -48,22 +48,13 @@ Details: `GOOGLE_CALENDAR_SETUP.md`
 
 1. **Authentication** → enable **Email/Password** (Google: see section A)
 2. **Firestore** → **Rules** → publish `firestore.rules` from this repo
-3. **Web email** (pick one):
-   - Run `.\scripts\deploy-email.ps1` after `firebase login`, **or**
-   - Install **Trigger Email** extension, collection `mail`, SMTP = Resend
+3. **Email (Gmail SMTP via Cloud Function):**
+   - Create a Gmail **App Password** at <https://myaccount.google.com/apppasswords>
+   - Paste it into `functions/.env` (`GMAIL_USER`, `GMAIL_APP_PASSWORD`,
+     `EMAIL_FROM`).
+   - Run `.\scripts\deploy-email.ps1` after `firebase login`.
 
 Details: `EMAIL_SETUP.md`
-
-### D. Resend — send to **any** signup email
-
-1. [resend.com/domains](https://resend.com/domains) → verify your domain
-2. Set in **both** `assets/config.env` and `functions/.env`:
-   ```env
-   EMAIL_FROM=Booqly <noreply@yourdomain.com>
-   ```
-3. Redeploy: `.\scripts\deploy-email.ps1`
-
-Details: `RESEND_DOMAIN.md`
 
 ## Run the app
 
@@ -79,5 +70,6 @@ Press **R** after changing `config.env`.
 | Feature | Test |
 |--------|------|
 | Google sign-up | Sign up → **Sign up with Google** |
-| Email code | Sign up → use email on verified Resend domain |
+| Email code | Sign up with any email; verification arrives in seconds |
+| Book completed | Open a book → **Mark as Completed** → congrats email arrives |
 | Calendar | Settings → **Link** → complete popup |

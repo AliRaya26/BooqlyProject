@@ -9,7 +9,7 @@ Set-Location $root
 & (Join-Path $PSScriptRoot "sync-env.ps1")
 
 if (-not (Test-Path "functions\.env")) {
-  Write-Error "Missing functions\.env - copy functions\.env.example and set RESEND_API_KEY."
+  Write-Error "Missing functions\.env - copy functions\.env.example and set GMAIL_USER + GMAIL_APP_PASSWORD."
 }
 
 if (-not (Test-Path "functions\node_modules")) {
@@ -31,13 +31,17 @@ Write-Host "Deploying sendAuthEmail, sendPasswordResetEmail + Firestore rules to
 $deployOutput = npx --yes firebase-tools@13 deploy --only functions,firestore:rules --project booqlyapp-83777 2>&1 | Out-String
 Write-Host $deployOutput
 if ($LASTEXITCODE -ne 0) {
-  if ($deployOutput -match "Blaze") {
+  if ($deployOutput -match "Blaze" -or
+      $deployOutput -match "Billing account .* is not open" -or
+      $deployOutput -match "billing-disabled") {
     Write-Host ""
     Write-Host "Cloud Functions require the Blaze (pay-as-you-go) plan."
-    Write-Host "Upgrade (free tier still applies): https://console.firebase.google.com/project/booqlyapp-83777/usage/details"
-    Write-Host "Then run: .\scripts\deploy-email.ps1"
+    Write-Host "Upgrade (free tier still applies for low usage):"
+    Write-Host "  https://console.firebase.google.com/project/booqlyapp-83777/usage/details"
+    Write-Host "After upgrading, re-run: .\scripts\deploy-email.ps1"
     Write-Host ""
     Write-Host "Until then, forgot-password uses Firebase's built-in email (check spam)."
+    Write-Host "Free-time nudges still create local notifications, but no email is sent."
   }
   exit 1
 }

@@ -1,22 +1,32 @@
-# Copies RESEND + EMAIL_FROM from assets/config.env into functions/.env
+# Gmail credentials live ONLY in functions/.env (the server). They are never
+# bundled into the mobile/web app. This script just makes sure that file
+# exists and has the keys the Cloud Function expects.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$configPath = Join-Path $root "assets\config.env"
 $functionsEnv = Join-Path $root "functions\.env"
+$example = Join-Path $root "functions\.env.example"
 
-if (-not (Test-Path $configPath)) {
-  Write-Error "Missing assets\config.env"
+if (-not (Test-Path $functionsEnv)) {
+  if (Test-Path $example) {
+    Copy-Item $example $functionsEnv
+    Write-Host "Created functions\.env from .env.example. Open it and fill in GMAIL_USER + GMAIL_APP_PASSWORD before deploying."
+    exit 1
+  }
+  Write-Error "Missing functions\.env (and no .env.example to copy from)."
 }
 
-$lines = Get-Content $configPath
-$out = @()
-foreach ($name in @("RESEND_API_KEY", "EMAIL_FROM")) {
-  $match = $lines | Where-Object { $_ -match "^$name=" } | Select-Object -First 1
-  if ($match) { $out += $match }
+$content = Get-Content $functionsEnv -Raw
+$required = @("GMAIL_USER", "GMAIL_APP_PASSWORD", "EMAIL_FROM")
+$missing = @()
+foreach ($name in $required) {
+  if ($content -notmatch "(?m)^$name=.+") { $missing += $name }
 }
-if ($out.Count -eq 0) {
-  Write-Error "config.env must contain RESEND_API_KEY and EMAIL_FROM"
+if ($missing.Count -gt 0) {
+  Write-Error ("functions\.env is missing: " + ($missing -join ", "))
 }
 
-Set-Content -Path $functionsEnv -Value ($out -join "`n") -Encoding utf8
-Write-Host "Updated functions\.env from assets\config.env"
+if ($content -match "PASTE_16_CHAR_APP_PASSWORD_HERE") {
+  Write-Error "functions\.env still has the placeholder GMAIL_APP_PASSWORD. Generate one at https://myaccount.google.com/apppasswords and paste it in."
+}
+
+Write-Host "functions\.env looks good."

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Shared auth screen shell: tablet-friendly width, keyboard insets, tap-to-dismiss.
@@ -13,10 +15,13 @@ class AuthScaffold extends StatelessWidget {
 
   static const bg = Color(0xFF0E0C0A);
 
+  // Reserve enough vertical space for the inner header padding (24 top + 24
+  // bottom). Any value above 0 is fine; this just lets the scroll view fill
+  // the viewport when content is short.
+  static const _verticalChrome = 48.0;
+
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
     return Scaffold(
       backgroundColor: bg,
       resizeToAvoidBottomInset: true,
@@ -26,20 +31,33 @@ class AuthScaffold extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           child: LayoutBuilder(
             builder: (context, constraints) {
+              // Scaffold(resizeToAvoidBottomInset: true) already removes the
+              // keyboard height from constraints.maxHeight. Earlier versions
+              // subtracted viewInsets.bottom again, which produced a negative
+              // minHeight (-2.0) when the IME opened in landscape and crashed
+              // every frame with "BoxConstraints has a negative minimum
+              // height". Use math.max + isFinite to guarantee a valid value
+              // regardless of the parent's constraints.
+              final maxH = constraints.maxHeight;
+              final double minHeight = (maxH.isFinite)
+                  ? math.max(0.0, maxH - _verticalChrome)
+                  : 0.0;
+              final maxWidth = constraints.maxWidth > 600 ? 440.0 : 520.0;
               return SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.fromLTRB(
                   24,
                   showBackButton ? 8 : 16,
                   24,
-                  24 + bottomInset,
+                  24,
                 ),
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: constraints.maxWidth > 600 ? 440 : 520,
-                      minHeight: constraints.maxHeight - bottomInset - 48,
+                      maxWidth: maxWidth,
+                      minHeight: minHeight,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

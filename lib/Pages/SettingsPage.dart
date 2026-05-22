@@ -34,6 +34,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _calendarEmail;
   bool _remindersEnabled = true;
   bool _hasOAuthConfig = false;
+  bool _sendingTestEmail = false;
 
   @override
   void initState() {
@@ -177,6 +178,20 @@ class _SettingsPageState extends State<SettingsPage> {
         const SnackBar(content: Text('Free-time reading nudges enabled.')),
       );
     }
+  }
+
+  Future<void> _sendTestNudgeEmail() async {
+    if (_sendingTestEmail) return;
+    setState(() => _sendingTestEmail = true);
+    final result = await _motivationService.sendTestNudgeEmail();
+    if (!mounted) return;
+    setState(() => _sendingTestEmail = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.detail),
+        duration: const Duration(seconds: 8),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -339,8 +354,31 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 12),
                 _hintCard(
-                  'Booqly checks today\'s calendar (8am–10pm) for gaps of 25+ minutes and sends a gentle reminder at the start of each block.',
+                  'Booqly checks today\'s calendar (8am–10pm) for gaps of 25+ minutes and sends a gentle reminder at the start of each block. An email goes out alongside each notification (max 3/day).',
                 ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 12),
+                  _SettingsTile(
+                    icon: Icons.mark_email_unread_outlined,
+                    title: 'Send test nudge email',
+                    subtitle:
+                        'Dev-only: bypass Calendar and fire a nudge to your signed-in email.',
+                    trailing: _sendingTestEmail
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.gold,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            color: AppColors.gold.withValues(alpha: 0.9),
+                          ),
+                    onTap: _sendingTestEmail ? null : _sendTestNudgeEmail,
+                  ),
+                ],
                 const SizedBox(height: 28),
                 _sectionLabel('Account'),
                 const SizedBox(height: 10),
