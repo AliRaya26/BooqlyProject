@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   firebase_auth
   firebase_core
+  firebase_storage
   flutter_timezone
   permission_handler_windows
   syncfusion_pdfviewer_windows

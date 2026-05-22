@@ -12,6 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:booqly/services/feedback_seed_service.dart';
+import 'package:booqly/Pages/ManualEntryPage.dart';
 import 'dart:async';
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
@@ -593,7 +594,10 @@ void _showAddBottomSheet(BuildContext context) {
             context,
             icon: Icons.edit_rounded,
             label: 'Manual entry',
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualEntryPage()));
+            },
           ),
           const SizedBox(height: 8),
         ],

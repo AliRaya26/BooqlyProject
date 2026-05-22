@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:booqly/models/book_model.dart';
@@ -270,9 +271,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       );
     } catch (e, stack) {
       debugPrint('BookDetailPage._sendBookCompletedEmail error: $e\n$stack');
-      _showCompletionEmailMessage(
-        'Could not send congratulations email: $e',
-      );
+      _showCompletionEmailMessage('Could not send congratulations email: $e');
     }
   }
 
@@ -532,10 +531,35 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     width: double.infinity,
                     height: 420,
 
-                    child: Image.network(
-                      widget.book.coverUrl,
-                      fit: BoxFit.cover,
-                    ),
+                    child: widget.book.coverUrl.startsWith('http')
+                        ? Image.network(
+                            widget.book.coverUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) {
+                              return Container(
+                                color: AppColors.surface,
+                                child: const Icon(
+                                  Icons.broken_image_rounded,
+                                  color: AppColors.gold,
+                                  size: 50,
+                                ),
+                              );
+                            },
+                          )
+                        : Image.file(
+                            File(widget.book.coverUrl),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) {
+                              return Container(
+                                color: AppColors.surface,
+                                child: const Icon(
+                                  Icons.broken_image_rounded,
+                                  color: AppColors.gold,
+                                  size: 50,
+                                ),
+                              );
+                            },
+                          ),
                   ),
 
                   Container(
@@ -796,7 +820,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
                               activeTrackColor: AppColors.gold,
                               inactiveTrackColor: Colors.white12,
                               thumbColor: AppColors.gold,
-                              overlayColor: AppColors.gold.withValues(alpha: 0.2),
+                              overlayColor: AppColors.gold.withValues(
+                                alpha: 0.2,
+                              ),
                               trackHeight: 4,
                             ),
 
@@ -839,7 +865,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     ),
 
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.04),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.04,
+                                      ),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: AppColors.border,
@@ -916,7 +944,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     ),
 
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.04),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.04,
+                                      ),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: AppColors.border,
@@ -1439,8 +1469,8 @@ class _StarRating extends StatelessWidget {
           filled
               ? Icons.star_rounded
               : half
-                  ? Icons.star_half_rounded
-                  : Icons.star_outline_rounded,
+              ? Icons.star_half_rounded
+              : Icons.star_outline_rounded,
           size: size,
           color: AppColors.gold,
         );
