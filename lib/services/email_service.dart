@@ -191,39 +191,167 @@ class EmailService {
     required String bookTitle,
     required String author,
     required int totalPages,
+    String? coverUrl,
+    DateTime? completedAt,
   }) {
-    final greeting = firstName.isNotEmpty ? firstName : 'Reader';
+    final greeting = _escapeHtml(
+      firstName.isNotEmpty ? firstName : 'Reader',
+    );
     final title = _escapeHtml(bookTitle);
-    final authorLine = author.trim().isNotEmpty
-        ? '<p style="color:#888580;margin:0;">by ${_escapeHtml(author)}</p>'
+    final hasAuthor = author.trim().isNotEmpty;
+    final authorHtml = hasAuthor
+        ? '<p style="margin:6px 0 0;color:#888580;font-size:14px;font-style:italic;">by ${_escapeHtml(author)}</p>'
         : '';
-    final pagesLine = totalPages > 0
-        ? '<p style="margin:16px 0 0;color:#D4A96A;font-size:15px;">$totalPages pages read</p>'
+
+    final cover = coverUrl?.trim() ?? '';
+    final hasCover = cover.startsWith('https://');
+    final coverCell = hasCover
+        ? '''
+                <td valign="top" width="96" style="padding:18px 0 18px 18px;">
+                  <img src="${_escapeHtml(cover)}" alt="${title} cover" width="80" height="120" style="display:block;width:80px;height:120px;border-radius:6px;border:1px solid #2A2520;object-fit:cover;background:#0E0C0A;" />
+                </td>'''
         : '';
+    final bookCellPadding = hasCover ? '18px' : '20px 24px';
+
+    final finished = completedAt ?? DateTime.now();
+    final completedLabel = _escapeHtml(_shortDateLabel(finished));
+
+    final pagesStat = totalPages > 0 ? '$totalPages' : '—';
 
     return _send(
       to: toEmail,
-      subject: 'Congratulations — you finished $bookTitle',
+      subject: 'You finished $bookTitle — congratulations',
       html: '''
 <!DOCTYPE html>
-<html>
-<body style="font-family:Georgia,serif;background:#0E0C0A;color:#F5F0E8;padding:32px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <p style="font-size:40px;margin:0 0 8px;">🏆</p>
-    <h1 style="color:#D4A96A;font-style:italic;margin:0 0 12px;">Congratulations!</h1>
-    <p style="font-size:17px;line-height:1.6;">Hi ${_escapeHtml(greeting)},</p>
-    <p style="font-size:17px;line-height:1.6;">You did it — you finished a book on Booqly. That is a real accomplishment worth celebrating.</p>
-    <div style="background:#1A1713;border:1px solid #2A2520;border-radius:16px;padding:22px 24px;margin:24px 0;">
-      <p style="margin:0;font-size:20px;font-weight:bold;color:#F5F0E8;">$title</p>
-      $authorLine
-      $pagesLine
-    </div>
-    <p style="font-size:17px;line-height:1.6;">Take a moment to enjoy it. When you are ready, your library is waiting with the next adventure.</p>
-    <p style="color:#888580;margin-top:28px;">Happy reading,<br>The Booqly team</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Congratulations from Booqly</title>
+</head>
+<body style="margin:0;padding:0;background:#0E0C0A;font-family:Georgia,'Times New Roman',serif;color:#F5F0E8;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#0E0C0A;">
+    You finished $title. A real accomplishment — celebrate the chapter you just closed.
   </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0C0A;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#1A1713;border:1px solid #2A2520;border-radius:24px;overflow:hidden;">
+          <tr>
+            <td bgcolor="#D4A96A" height="6" style="height:6px;line-height:6px;font-size:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:44px 32px 0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" width="96" height="96" bgcolor="#2C200F" style="width:96px;height:96px;background:#2C200F;border-radius:48px;font-size:48px;line-height:96px;text-align:center;">
+                    &#127942;
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:8px 32px 0;">
+              <p style="margin:24px 0 0;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:36px;font-weight:bold;color:#D4A96A;letter-spacing:0.5px;line-height:1.1;">Congratulations!</p>
+              <p style="margin:10px 0 0;color:#888580;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;">A new book finished</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px 0;">
+              <p style="margin:0;font-size:17px;line-height:1.7;color:#F5F0E8;">Hi $greeting,</p>
+              <p style="margin:12px 0 0;font-size:17px;line-height:1.7;color:#E0D8CC;">You just closed the last page — and that's no small thing. Every book finished is hours reclaimed for your imagination, and a story that will keep walking with you.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0C0A;border:1px solid #2A2520;border-radius:16px;">
+                <tr>
+$coverCell
+                  <td valign="middle" style="padding:$bookCellPadding;">
+                    <p style="margin:0;color:#888580;font-size:11px;letter-spacing:2px;text-transform:uppercase;">You finished</p>
+                    <p style="margin:6px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:bold;color:#F5F0E8;line-height:1.3;">$title</p>
+                    $authorHtml
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 36px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" width="33%" bgcolor="#0E0C0A" style="background:#0E0C0A;border:1px solid #2A2520;border-radius:14px;padding:18px 6px;">
+                    <p style="margin:0;font-family:Georgia,serif;font-size:24px;font-weight:bold;color:#D4A96A;line-height:1;">$pagesStat</p>
+                    <p style="margin:6px 0 0;font-size:10px;color:#888580;letter-spacing:1.5px;text-transform:uppercase;">Pages read</p>
+                  </td>
+                  <td width="8" style="font-size:0;line-height:0;">&nbsp;</td>
+                  <td align="center" width="33%" bgcolor="#0E0C0A" style="background:#0E0C0A;border:1px solid #2A2520;border-radius:14px;padding:18px 6px;">
+                    <p style="margin:0;font-family:Georgia,serif;font-size:24px;font-weight:bold;color:#D4A96A;line-height:1;">100%</p>
+                    <p style="margin:6px 0 0;font-size:10px;color:#888580;letter-spacing:1.5px;text-transform:uppercase;">Completed</p>
+                  </td>
+                  <td width="8" style="font-size:0;line-height:0;">&nbsp;</td>
+                  <td align="center" width="33%" bgcolor="#0E0C0A" style="background:#0E0C0A;border:1px solid #2A2520;border-radius:14px;padding:18px 6px;">
+                    <p style="margin:0;font-family:Georgia,serif;font-size:20px;font-weight:bold;color:#D4A96A;line-height:1;">$completedLabel</p>
+                    <p style="margin:6px 0 0;font-size:10px;color:#888580;letter-spacing:1.5px;text-transform:uppercase;">Finished on</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0 0 0 16px;border-left:3px solid #D4A96A;">
+                    <p style="margin:0;font-family:Georgia,serif;font-style:italic;color:#E0D8CC;font-size:16px;line-height:1.6;">&ldquo;A reader lives a thousand lives before he dies. The man who never reads lives only one.&rdquo;</p>
+                    <p style="margin:8px 0 0;color:#888580;font-size:13px;">&mdash; George R.R. Martin</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:36px 36px 0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td bgcolor="#D4A96A" align="center" style="background:#D4A96A;border-radius:12px;">
+                    <span style="display:inline-block;padding:14px 30px;color:#0E0C0A;font-family:Georgia,serif;font-weight:bold;font-size:15px;letter-spacing:0.5px;">Open Booqly &middot; Pick your next read</span>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0;font-size:13px;color:#888580;">Your library is waiting with the next chapter.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px 0;">
+              <div style="height:1px;background:#2A2520;font-size:0;line-height:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 36px 36px;">
+              <p style="margin:0;color:#888580;font-size:13px;line-height:1.7;">Happy reading,<br/><span style="color:#D4A96A;font-style:italic;font-family:Georgia,serif;">&mdash; The Booqly team</span></p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:18px 0 0;color:#5a5853;font-size:11px;font-family:Georgia,serif;">You're getting this because you finished a book on Booqly.</p>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>''',
     );
+  }
+
+  static const _monthAbbreviations = <String>[
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _shortDateLabel(DateTime date) {
+    final local = date.toLocal();
+    final month = _monthAbbreviations[local.month - 1];
+    return '$month ${local.day}';
   }
 
   String _escapeHtml(String value) {

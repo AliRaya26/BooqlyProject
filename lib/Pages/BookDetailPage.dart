@@ -251,6 +251,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
         bookTitle: widget.book.title,
         author: widget.book.author,
         totalPages: widget.book.totalPages,
+        coverUrl: widget.book.coverUrl,
+        completedAt: DateTime.now(),
       );
 
       if (result.success) {

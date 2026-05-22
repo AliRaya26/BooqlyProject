@@ -1363,10 +1363,29 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
   List<_WeekStats> _weeks = [];
   int _selectedWeek = -1; // -1 = none selected
 
+  // Live Firestore subscriptions (auto-refresh like the weekly section)
+  StreamSubscription? _librarySub;
+  StreamSubscription? _sessionsSub;
+
+  // Latest snapshots, kept so we can recompute when either stream fires
+  QuerySnapshot? _latestLibrarySnap;
+  QuerySnapshot? _latestSessionSnap;
+
+  // Month bounds captured at subscribe-time (matches previous behavior)
+  DateTime? _monthStart;
+  DateTime? _monthEnd;
+
   @override
   void initState() {
     super.initState();
-    _fetchMonthlyStats();
+    _listenToMonthlyStats();
+  }
+
+  @override
+  void dispose() {
+    _librarySub?.cancel();
+    _sessionsSub?.cancel();
+    super.dispose();
   }
 
   // ── Build the 4 week buckets for the current month ──────────────────────
@@ -1403,9 +1422,11 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     return weeks;
   }
 
-  // ── Fetch real data from Firestore ──────────────────────────────────────
+  // ── Subscribe to live Firestore data ────────────────────────────────────
+  // Mirrors the weekly section: snapshot listeners auto-refresh whenever
+  // the library or readingSessions collections change.
 
-  Future<void> _fetchMonthlyStats() async {
+  void _listenToMonthlyStats() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) setState(() => _loading = false);
@@ -1413,166 +1434,176 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     }
 
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    _monthStart = DateTime(now.year, now.month, 1);
+    _monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
 
-    try {
-      // Build empty week buckets
-      final buckets = _buildWeekBuckets();
+    // Library stream — drives totals, completed books, streak, and the
+    // fallback page-per-week computation when readingSessions is missing.
+    _librarySub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('library')
+        .snapshots()
+        .listen(
+          (snap) {
+            _latestLibrarySnap = snap;
+            _recompute();
+          },
+          onError: (e) {
+            debugPrint('❌ Monthly library stream error: $e');
+            if (mounted) setState(() => _loading = false);
+          },
+        );
 
-      // ── Reading sessions this month ──
-      // Each time the user changes page, a session is logged in readingSessions
-      // If you don't have that collection yet, we read from library lastReadAt
-      // and currentPage changes — using the library docs as approximation
+    // Reading sessions stream — optional collection; on error we just fall
+    // back to the library-based approximation.
+    _sessionsSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('readingSessions')
+        .where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(_monthStart!),
+        )
+        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(_monthEnd!))
+        .snapshots()
+        .listen(
+          (snap) {
+            _latestSessionSnap = snap;
+            _recompute();
+          },
+          onError: (_) {
+            _latestSessionSnap = null;
+            _recompute();
+          },
+        );
+  }
 
-      final librarySnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('library')
-          .get();
+  // ── Recompute all stats from the latest snapshots ───────────────────────
 
-      int totalPages = 0;
-      int totalBooks = 0;
+  void _recompute() {
+    final librarySnap = _latestLibrarySnap;
+    final monthStart = _monthStart;
+    final monthEnd = _monthEnd;
+    if (librarySnap == null || monthStart == null || monthEnd == null) return;
 
-      // ── Reading sessions (if you have this collection) ──
-      QuerySnapshot? sessionSnap;
-      try {
-        sessionSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('readingSessions')
-            .where(
-              'date',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart),
-            )
-            .where('date', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
-            .get();
-      } catch (_) {
-        sessionSnap = null; // collection doesn't exist yet
-      }
+    final sessionSnap = _latestSessionSnap;
+    final buckets = _buildWeekBuckets();
 
-      // ── Count pages per week from sessions ──
-      final weekPages = List<int>.filled(buckets.length, 0);
-      final weekSessions = List<int>.filled(buckets.length, 0);
+    int totalPages = 0;
+    int totalBooks = 0;
 
-      if (sessionSnap != null && sessionSnap.docs.isNotEmpty) {
-        for (final doc in sessionSnap.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final pages = (data['pagesRead'] ?? 0) as int;
-          final date = (data['date'] as Timestamp).toDate();
-          totalPages += pages;
+    final weekPages = List<int>.filled(buckets.length, 0);
+    final weekSessions = List<int>.filled(buckets.length, 0);
 
-          for (int i = 0; i < buckets.length; i++) {
-            if (!date.isBefore(buckets[i].weekStart) &&
-                !date.isAfter(buckets[i].weekEnd)) {
-              weekPages[i] += pages;
-              weekSessions[i] += 1;
-              break;
-            }
-          }
-        }
-      } else {
-        // Fallback: use currentPage from library docs as total pages
-        for (final doc in librarySnap.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          totalPages += (data['currentPage'] ?? 0) as int;
+    if (sessionSnap != null && sessionSnap.docs.isNotEmpty) {
+      for (final doc in sessionSnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final pages = (data['pagesRead'] ?? 0) as int;
+        final date = (data['date'] as Timestamp).toDate();
+        totalPages += pages;
 
-          // Assign to the week based on lastReadAt
-          final lastRead = data['lastReadAt'] as Timestamp?;
-          if (lastRead != null) {
-            final date = lastRead.toDate();
-            if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
-              for (int i = 0; i < buckets.length; i++) {
-                if (!date.isBefore(buckets[i].weekStart) &&
-                    !date.isAfter(buckets[i].weekEnd)) {
-                  weekPages[i] += (data['currentPage'] ?? 0) as int;
-                  weekSessions[i] += 1;
-                  break;
-                }
-              }
-            }
+        for (int i = 0; i < buckets.length; i++) {
+          if (!date.isBefore(buckets[i].weekStart) &&
+              !date.isAfter(buckets[i].weekEnd)) {
+            weekPages[i] += pages;
+            weekSessions[i] += 1;
+            break;
           }
         }
       }
-
-      // ── Count completed books this month ──
-      final weekBooks = List<int>.filled(buckets.length, 0);
+    } else {
+      // Fallback: use currentPage from library docs as total pages
       for (final doc in librarySnap.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        if (data['status'] == 'completed') {
-          totalBooks++;
-          final completedAt = data['completedAt'] as Timestamp?;
-          if (completedAt != null) {
-            final date = completedAt.toDate();
-            if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
-              for (int i = 0; i < buckets.length; i++) {
-                if (!date.isBefore(buckets[i].weekStart) &&
-                    !date.isAfter(buckets[i].weekEnd)) {
-                  weekBooks[i] += 1;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
+        totalPages += (data['currentPage'] ?? 0) as int;
 
-      // Calculate streak from library lastReadAt timestamps
-      final Set<String> readDays = {};
-      for (final doc in librarySnap.docs) {
-        final data = doc.data() as Map<String, dynamic>;
         final lastRead = data['lastReadAt'] as Timestamp?;
         if (lastRead != null) {
-          final d = lastRead.toDate();
-          readDays.add('${d.year}-${d.month}-${d.day}');
+          final date = lastRead.toDate();
+          if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
+            for (int i = 0; i < buckets.length; i++) {
+              if (!date.isBefore(buckets[i].weekStart) &&
+                  !date.isAfter(buckets[i].weekEnd)) {
+                weekPages[i] += (data['currentPage'] ?? 0) as int;
+                weekSessions[i] += 1;
+                break;
+              }
+            }
+          }
         }
       }
+    }
 
-      // Count consecutive days going backwards from today
-      int streak = 0;
-      final now = DateTime.now();
-      for (int i = 0; i < 365; i++) {
-        final day = now.subtract(Duration(days: i));
-        final key = '${day.year}-${day.month}-${day.day}';
-        if (readDays.contains(key)) {
-          streak++;
-        } else {
-          break; // streak broken
+    // ── Count completed books this month ──
+    final weekBooks = List<int>.filled(buckets.length, 0);
+    for (final doc in librarySnap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      if (data['status'] == 'completed') {
+        totalBooks++;
+        final completedAt = data['completedAt'] as Timestamp?;
+        if (completedAt != null) {
+          final date = completedAt.toDate();
+          if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
+            for (int i = 0; i < buckets.length; i++) {
+              if (!date.isBefore(buckets[i].weekStart) &&
+                  !date.isAfter(buckets[i].weekEnd)) {
+                weekBooks[i] += 1;
+                break;
+              }
+            }
+          }
         }
       }
+    }
 
-      // ── Build final week list ──
-      final finalWeeks = List.generate(
-        buckets.length,
-        (i) => _WeekStats(
-          label: buckets[i].label,
-          pages: weekPages[i],
-          sessions: weekSessions[i],
-          booksRead: weekBooks[i],
-          weekStart: buckets[i].weekStart,
-          weekEnd: buckets[i].weekEnd,
-        ),
-      );
-
-      // ── Totals ──
-      final daysInMonth = monthEnd.day;
-      final avgPerDay = daysInMonth > 0 ? totalPages ~/ daysInMonth : 0;
-      // Approx hours: ~40 pages per hour
-      final totalHours = (totalPages / 40).round();
-
-      if (mounted) {
-        setState(() {
-          _weeks = finalWeeks;
-          _totalPages = totalPages;
-          _totalBooks = totalBooks;
-          _streak = streak;
-          _avgPerDay = avgPerDay;
-          _loading = false;
-        });
+    // Calculate streak from library lastReadAt timestamps
+    final Set<String> readDays = {};
+    for (final doc in librarySnap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final lastRead = data['lastReadAt'] as Timestamp?;
+      if (lastRead != null) {
+        final d = lastRead.toDate();
+        readDays.add('${d.year}-${d.month}-${d.day}');
       }
-    } catch (e) {
-      debugPrint('❌ Monthly stats error: $e');
-      if (mounted) setState(() => _loading = false);
+    }
+
+    int streak = 0;
+    final today = DateTime.now();
+    for (int i = 0; i < 365; i++) {
+      final day = today.subtract(Duration(days: i));
+      final key = '${day.year}-${day.month}-${day.day}';
+      if (readDays.contains(key)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    final finalWeeks = List.generate(
+      buckets.length,
+      (i) => _WeekStats(
+        label: buckets[i].label,
+        pages: weekPages[i],
+        sessions: weekSessions[i],
+        booksRead: weekBooks[i],
+        weekStart: buckets[i].weekStart,
+        weekEnd: buckets[i].weekEnd,
+      ),
+    );
+
+    final daysInMonth = monthEnd.day;
+    final avgPerDay = daysInMonth > 0 ? totalPages ~/ daysInMonth : 0;
+
+    if (mounted) {
+      setState(() {
+        _weeks = finalWeeks;
+        _totalPages = totalPages;
+        _totalBooks = totalBooks;
+        _streak = streak;
+        _avgPerDay = avgPerDay;
+        _loading = false;
+      });
     }
   }
 
