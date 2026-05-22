@@ -998,12 +998,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             _bookStatus = "reading";
                           });
 
-                          Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => PdfReaderPage(book: widget.book),
                             ),
                           );
+
+                          // Refresh after returning
+                          await loadBookStatus();
+                          await loadProgress();
+
+                          if (mounted) {
+                            setState(() {});
+                          }
                         },
 
                         style: ElevatedButton.styleFrom(

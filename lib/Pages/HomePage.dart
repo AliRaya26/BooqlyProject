@@ -734,32 +734,6 @@ class _TopBar extends StatelessWidget {
                   );
                 },
               ),
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsPage(),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: const BoxDecoration(
-                    color: AppColors.gold,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'L',
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.bg,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ],
@@ -1349,13 +1323,270 @@ class _WantToReadSection extends StatelessWidget {
 }
 
 // ─── Monthly Statistics ───────────────────────────────────────────────────────
+// ─── Data model for one week's stats ─────────────────────────────────────────
 
-class _MonthlyStatsSection extends StatelessWidget {
+class _WeekStats {
+  final String label; // W1, W2, W3, W4
+  final int pages; // pages read that week
+  final int sessions; // number of reading sessions
+  final int booksRead; // books completed that week
+  final DateTime weekStart;
+  final DateTime weekEnd;
+
+  const _WeekStats({
+    required this.label,
+    required this.pages,
+    required this.sessions,
+    required this.booksRead,
+    required this.weekStart,
+    required this.weekEnd,
+  });
+}
+
+// ─── Monthly Stats Section ────────────────────────────────────────────────────
+
+class _MonthlyStatsSection extends StatefulWidget {
   const _MonthlyStatsSection({required this.outfit});
   final TextStyle outfit;
 
-  static const _weekBars = [0.55, 0.80, 0.45, 0.95];
-  static const _weekLabels = ['W1', 'W2', 'W3', 'W4'];
+  @override
+  State<_MonthlyStatsSection> createState() => _MonthlyStatsSectionState();
+}
+
+class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
+  // ── State ──────────────────────────────────────────────────────────────
+  bool _loading = true;
+  int _totalBooks = 0;
+  int _totalPages = 0;
+  int _streak = 0;
+  int _avgPerDay = 0;
+  List<_WeekStats> _weeks = [];
+  int _selectedWeek = -1; // -1 = none selected
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMonthlyStats();
+  }
+
+  // ── Build the 4 week buckets for the current month ──────────────────────
+
+  List<_WeekStats> _buildWeekBuckets() {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    final end = DateTime(now.year, now.month + 1, 0); // last day of month
+
+    List<_WeekStats> weeks = [];
+    int weekNum = 1;
+    DateTime cursor = start;
+
+    while (cursor.isBefore(end) || cursor.isAtSameMomentAs(end)) {
+      // Each bucket is 7 days, last bucket takes the rest
+      final weekEnd = weekNum < 4 ? cursor.add(const Duration(days: 6)) : end;
+
+      weeks.add(
+        _WeekStats(
+          label: 'W$weekNum',
+          pages: 0,
+          sessions: 0,
+          booksRead: 0,
+          weekStart: cursor,
+          weekEnd: weekEnd,
+        ),
+      );
+
+      cursor = weekEnd.add(const Duration(days: 1));
+      weekNum++;
+      if (weekNum > 4) break;
+    }
+
+    return weeks;
+  }
+
+  // ── Fetch real data from Firestore ──────────────────────────────────────
+
+  Future<void> _fetchMonthlyStats() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
+    try {
+      // Build empty week buckets
+      final buckets = _buildWeekBuckets();
+
+      // ── Reading sessions this month ──
+      // Each time the user changes page, a session is logged in readingSessions
+      // If you don't have that collection yet, we read from library lastReadAt
+      // and currentPage changes — using the library docs as approximation
+
+      final librarySnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('library')
+          .get();
+
+      int totalPages = 0;
+      int totalBooks = 0;
+
+      // ── Reading sessions (if you have this collection) ──
+      QuerySnapshot? sessionSnap;
+      try {
+        sessionSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('readingSessions')
+            .where(
+              'date',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart),
+            )
+            .where('date', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+            .get();
+      } catch (_) {
+        sessionSnap = null; // collection doesn't exist yet
+      }
+
+      // ── Count pages per week from sessions ──
+      final weekPages = List<int>.filled(buckets.length, 0);
+      final weekSessions = List<int>.filled(buckets.length, 0);
+
+      if (sessionSnap != null && sessionSnap.docs.isNotEmpty) {
+        for (final doc in sessionSnap.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final pages = (data['pagesRead'] ?? 0) as int;
+          final date = (data['date'] as Timestamp).toDate();
+          totalPages += pages;
+
+          for (int i = 0; i < buckets.length; i++) {
+            if (!date.isBefore(buckets[i].weekStart) &&
+                !date.isAfter(buckets[i].weekEnd)) {
+              weekPages[i] += pages;
+              weekSessions[i] += 1;
+              break;
+            }
+          }
+        }
+      } else {
+        // Fallback: use currentPage from library docs as total pages
+        for (final doc in librarySnap.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          totalPages += (data['currentPage'] ?? 0) as int;
+
+          // Assign to the week based on lastReadAt
+          final lastRead = data['lastReadAt'] as Timestamp?;
+          if (lastRead != null) {
+            final date = lastRead.toDate();
+            if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
+              for (int i = 0; i < buckets.length; i++) {
+                if (!date.isBefore(buckets[i].weekStart) &&
+                    !date.isAfter(buckets[i].weekEnd)) {
+                  weekPages[i] += (data['currentPage'] ?? 0) as int;
+                  weekSessions[i] += 1;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // ── Count completed books this month ──
+      final weekBooks = List<int>.filled(buckets.length, 0);
+      for (final doc in librarySnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['status'] == 'completed') {
+          totalBooks++;
+          final completedAt = data['completedAt'] as Timestamp?;
+          if (completedAt != null) {
+            final date = completedAt.toDate();
+            if (!date.isBefore(monthStart) && !date.isAfter(monthEnd)) {
+              for (int i = 0; i < buckets.length; i++) {
+                if (!date.isBefore(buckets[i].weekStart) &&
+                    !date.isAfter(buckets[i].weekEnd)) {
+                  weekBooks[i] += 1;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Calculate streak from library lastReadAt timestamps
+      final Set<String> readDays = {};
+      for (final doc in librarySnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final lastRead = data['lastReadAt'] as Timestamp?;
+        if (lastRead != null) {
+          final d = lastRead.toDate();
+          readDays.add('${d.year}-${d.month}-${d.day}');
+        }
+      }
+
+      // Count consecutive days going backwards from today
+      int streak = 0;
+      final now = DateTime.now();
+      for (int i = 0; i < 365; i++) {
+        final day = now.subtract(Duration(days: i));
+        final key = '${day.year}-${day.month}-${day.day}';
+        if (readDays.contains(key)) {
+          streak++;
+        } else {
+          break; // streak broken
+        }
+      }
+
+      // ── Build final week list ──
+      final finalWeeks = List.generate(
+        buckets.length,
+        (i) => _WeekStats(
+          label: buckets[i].label,
+          pages: weekPages[i],
+          sessions: weekSessions[i],
+          booksRead: weekBooks[i],
+          weekStart: buckets[i].weekStart,
+          weekEnd: buckets[i].weekEnd,
+        ),
+      );
+
+      // ── Totals ──
+      final daysInMonth = monthEnd.day;
+      final avgPerDay = daysInMonth > 0 ? totalPages ~/ daysInMonth : 0;
+      // Approx hours: ~40 pages per hour
+      final totalHours = (totalPages / 40).round();
+
+      if (mounted) {
+        setState(() {
+          _weeks = finalWeeks;
+          _totalPages = totalPages;
+          _totalBooks = totalBooks;
+          _streak = streak;
+          _avgPerDay = avgPerDay;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Monthly stats error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  String _formatDate(DateTime d) => '${d.day}/${d.month}';
+
+  double _maxPages() {
+    if (_weeks.isEmpty) return 1;
+    final m = _weeks.map((w) => w.pages).reduce((a, b) => a > b ? a : b);
+    return m == 0 ? 1 : m.toDouble();
+  }
+
+  // ─── Build ──────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1366,55 +1597,83 @@ class _MonthlyStatsSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.border),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _StatTile(value: '4', label: 'Books'),
-                    _vDivider(),
-                    _StatTile(value: '1240', label: 'Pages'),
-                    _vDivider(),
-                    _StatTile(value: '18h', label: 'Hours'),
-                    _vDivider(),
-                    _StatTile(value: '42 p.', label: 'Avg/day'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Pages per week',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
-                    letterSpacing: 0.05,
+            child: _loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(color: AppColors.gold),
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Top stat row ──
+                      Row(
+                        children: [
+                          _StatTile(value: '$_totalBooks', label: 'Books'),
+                          _vDivider(),
+                          _StatTile(value: '$_totalPages', label: 'Pages'),
+                          _vDivider(),
+                          _StatTile(value: '${_streak}d', label: 'Streak'),
+                          _vDivider(),
+                          _StatTile(value: '$_avgPerDay p.', label: 'Avg/day'),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      Text(
+                        'Pages per week',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                          letterSpacing: 0.05,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ── Bar chart ──
+                      SizedBox(
+                        height: 96,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(_weeks.length, (i) {
+                            final w = _weeks[i];
+                            final maxP = _maxPages();
+                            final frac = w.pages / maxP;
+                            final isTop =
+                                w.pages == maxP.round() && w.pages > 0;
+                            final isSel = _selectedWeek == i;
+
+                            return _Bar(
+                              fraction: frac,
+                              label: w.label,
+                              highlight: isTop,
+                              selected: isSel,
+                              onTap: () => setState(() {
+                                _selectedWeek = isSel ? -1 : i;
+                              }),
+                            );
+                          }),
+                        ),
+                      ),
+
+                      // ── Week detail popup ──
+                      if (_selectedWeek >= 0 &&
+                          _selectedWeek < _weeks.length) ...[
+                        const SizedBox(height: 14),
+                        _buildWeekDetail(_weeks[_selectedWeek]),
+                      ],
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 96,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(_weekBars.length, (i) {
-                      final isTop =
-                          _weekBars[i] ==
-                          _weekBars.reduce((a, b) => a > b ? a : b);
-                      return _Bar(
-                        fraction: _weekBars[i],
-                        label: _weekLabels[i],
-                        highlight: isTop,
-                      );
-                    }),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ],
@@ -1427,7 +1686,94 @@ class _MonthlyStatsSection extends StatelessWidget {
     margin: const EdgeInsets.symmetric(horizontal: 4),
     color: AppColors.border,
   );
+
+  // ── Expanded week detail card ────────────────────────────────────────────
+
+  Widget _buildWeekDetail(_WeekStats w) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.goldMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.goldDim),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${w.label}  ·  ${_formatDate(w.weekStart)} – ${_formatDate(w.weekEnd)}',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _selectedWeek = -1),
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: AppColors.gold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Stats
+          Row(
+            children: [
+              _detailStat('${w.pages}', 'Pages read'),
+              const SizedBox(width: 16),
+              _detailStat('${w.sessions}', 'Sessions'),
+              const SizedBox(width: 16),
+              _detailStat('${w.booksRead}', 'Books done'),
+            ],
+          ),
+          // Empty hint
+          if (w.pages == 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              'No reading recorded this week.',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _detailStat(String value, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.cormorantGaramond(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: AppColors.gold,
+          ),
+        ),
+        Text(
+          label,
+          style: GoogleFonts.outfit(fontSize: 10, color: AppColors.textMuted),
+        ),
+      ],
+    );
+  }
 }
+
+// ─── Stat tile ────────────────────────────────────────────────────────────────
 
 class _StatTile extends StatelessWidget {
   const _StatTile({required this.value, required this.label});
@@ -1442,8 +1788,8 @@ class _StatTile extends StatelessWidget {
           Text(
             value,
             style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w400,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
               color: AppColors.gold,
               height: 1,
             ),
@@ -1459,68 +1805,103 @@ class _StatTile extends StatelessWidget {
   }
 }
 
+// ─── Bar ─────────────────────────────────────────────────────────────────────
+
 class _Bar extends StatelessWidget {
   const _Bar({
     required this.fraction,
     required this.label,
     required this.highlight,
+    required this.selected,
+    required this.onTap,
   });
+
   final double fraction;
   final String label;
   final bool highlight;
+  final bool selected;
+  final VoidCallback onTap;
+
   static const _maxBarH = 52.0;
 
   @override
   Widget build(BuildContext context) {
+    final barColor = selected
+        ? AppColors.gold
+        : highlight
+        ? AppColors.gold
+        : AppColors.goldMuted;
+
     return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            SizedBox(
-              height: 18,
-              child: highlight
-                  ? Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.gold,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Best',
-                          style: GoogleFonts.outfit(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.bg,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Badge row
+              SizedBox(
+                height: 18,
+                child: highlight
+                    ? Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Best',
+                            style: GoogleFonts.outfit(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.bg,
+                            ),
                           ),
                         ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              height: _maxBarH * fraction,
-              decoration: BoxDecoration(
-                color: highlight ? AppColors.gold : AppColors.goldMuted,
-                borderRadius: BorderRadius.circular(6),
-                border: highlight ? null : Border.all(color: AppColors.goldDim),
+                      )
+                    : const SizedBox.shrink(),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                color: AppColors.textMuted,
+              const SizedBox(height: 6),
+              // Bar
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                height: fraction == 0 ? 4 : _maxBarH * fraction,
+                decoration: BoxDecoration(
+                  color: barColor,
+                  borderRadius: BorderRadius.circular(6),
+                  border: highlight || selected
+                      ? null
+                      : Border.all(color: AppColors.goldDim),
+                  // Selected glow
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.gold.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              // Label
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: 10,
+                  color: selected ? AppColors.gold : AppColors.textMuted,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
