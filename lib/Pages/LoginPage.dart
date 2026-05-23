@@ -2,6 +2,7 @@ import 'package:booqly/Pages/SignupPage.dart';
 import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/widgets/auth_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -129,8 +130,14 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final showBackButton = Navigator.canPop(context) ||
+        AuthNavigationController.instance.showLoginScreen.value;
+
     return AuthScaffold(
-      showBackButton: Navigator.canPop(context),
+      showBackButton: showBackButton,
+      onBack: AuthNavigationController.instance.showLoginScreen.value
+          ? () => AuthNavigationController.instance.clearLoginScreenRequest()
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

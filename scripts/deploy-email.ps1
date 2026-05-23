@@ -27,7 +27,7 @@ if ($loginList -match "No authorized accounts") {
   exit 1
 }
 
-Write-Host "Deploying sendAuthEmail, sendPasswordResetEmail + Firestore rules to booqlyapp-83777..."
+Write-Host "Deploying sendAuthEmail, sendPasswordResetEmail, sendReadingNudges + Firestore rules to booqlyapp-83777..."
 $deployOutput = npx --yes firebase-tools@13 deploy --only functions,firestore:rules --project booqlyapp-83777 2>&1 | Out-String
 Write-Host $deployOutput
 if ($LASTEXITCODE -ne 0) {
@@ -41,7 +41,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "After upgrading, re-run: .\scripts\deploy-email.ps1"
     Write-Host ""
     Write-Host "Until then, forgot-password uses Firebase's built-in email (check spam)."
-    Write-Host "Free-time nudges still create local notifications, but no email is sent."
+    Write-Host "Free-time nudges still create local notifications, but server push/email need Blaze."
   }
   exit 1
 }

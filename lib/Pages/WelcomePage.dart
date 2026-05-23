@@ -1,4 +1,4 @@
-import 'package:booqly/Pages/LoginPage.dart';
+import 'package:booqly/widgets/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -64,12 +64,8 @@ class WelcomePage extends StatelessWidget {
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LoginPage(),
-                              ),
-                            );
+                            AuthNavigationController.instance
+                                .requestLoginScreen();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _gold,

@@ -42,7 +42,15 @@ class EmailService {
   Future<EmailSendResult> sendPasswordResetEmail({
     required String toEmail,
   }) async {
+    // Normalize to lowercase. Firebase Auth's getUserByEmail is already case-
+    // insensitive, but Google sign-up sometimes hands us mixed-case emails
+    // and being defensive avoids hard-to-debug "not-found" responses.
+    final normalized = toEmail.trim().toLowerCase();
     try {
+      debugPrint(
+        'EmailService.sendPasswordResetEmail: invoking '
+        '"$_passwordResetCallableName" for "$normalized"',
+      );
       final callable = FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable(
@@ -53,13 +61,17 @@ class EmailService {
       );
 
       await callable.call<Map<String, dynamic>>({
-        'email': toEmail.trim(),
+        'email': normalized,
       });
 
+      debugPrint(
+        'EmailService.sendPasswordResetEmail: callable OK for "$normalized"',
+      );
       return const EmailSendResult(success: true, delivered: true);
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
-        'EmailService.sendPasswordResetEmail: ${e.code} ${e.message}',
+        'EmailService.sendPasswordResetEmail: FAILED code=${e.code} '
+        'message="${e.message}" for "$normalized"',
       );
       return EmailSendResult(
         success: false,
@@ -67,7 +79,10 @@ class EmailService {
         functionsErrorCode: e.code,
       );
     } catch (e) {
-      debugPrint('EmailService.sendPasswordResetEmail: $e');
+      debugPrint(
+        'EmailService.sendPasswordResetEmail: unexpected error '
+        'for "$normalized": $e',
+      );
       return EmailSendResult(
         success: false,
         errorMessage:
@@ -367,6 +382,11 @@ $coverCell
     required String subject,
     required String html,
   }) async {
+    debugPrint(
+      'EmailService._send: platform=${kIsWeb ? "web" : "mobile"} '
+      'to="$to" subject="$subject" htmlLen=${html.length}',
+    );
+
     if (kIsWeb) {
       final callable = await _sendViaCallable(
         to: to,
@@ -374,12 +394,17 @@ $coverCell
         html: html,
       );
       if (callable.success) {
+        debugPrint('EmailService._send: callable OK (web)');
         return const EmailSendResult(success: true, delivered: true);
       }
 
       // Function exists but failed (e.g. Resend rejected recipient) — do not
       // pretend queuing in Firestore sent the email.
       if (!_shouldFallbackToFirestoreMail(callable.functionsErrorCode)) {
+        debugPrint(
+          'EmailService._send: callable rejected (web), not falling back '
+          '(code=${callable.functionsErrorCode}, error="${callable.errorMessage}")',
+        );
         return EmailSendResult(
           success: false,
           errorMessage: callable.errorMessage ?? _webSetupHint,
@@ -395,6 +420,7 @@ $coverCell
         html: html,
       );
       if (mail.success) {
+        debugPrint('EmailService._send: queued in Firestore mail collection');
         return const EmailSendResult(
           success: true,
           delivered: false,
@@ -402,6 +428,9 @@ $coverCell
         );
       }
 
+      debugPrint(
+        'EmailService._send: web fallback failed: ${mail.errorMessage}',
+      );
       return EmailSendResult(
         success: false,
         errorMessage: mail.errorMessage ??
@@ -417,6 +446,7 @@ $coverCell
       html: html,
     );
     if (callable.success) {
+      debugPrint('EmailService._send: callable OK (mobile)');
       return const EmailSendResult(success: true, delivered: true);
     }
 
@@ -424,6 +454,10 @@ $coverCell
     // If the function ran and rejected the send (e.g. bad Gmail password), do
     // not silently try a different provider — surface the real error.
     if (!_shouldFallbackFromCallable(callable.functionsErrorCode)) {
+      debugPrint(
+        'EmailService._send: callable rejected (mobile), not falling back '
+        '(code=${callable.functionsErrorCode}, error="${callable.errorMessage}")',
+      );
       return EmailSendResult(
         success: false,
         errorMessage: callable.errorMessage ??
@@ -431,9 +465,20 @@ $coverCell
       );
     }
 
+    debugPrint(
+      'EmailService._send: callable unreachable (mobile, '
+      'code=${callable.functionsErrorCode}), trying Resend fallback',
+    );
     final resend = await _sendViaResend(to: to, subject: subject, html: html);
-    if (resend.success) return resend;
+    if (resend.success) {
+      debugPrint('EmailService._send: Resend fallback OK');
+      return resend;
+    }
 
+    debugPrint(
+      'EmailService._send: all transports failed. '
+      'callable="${callable.errorMessage}" resend="${resend.errorMessage}"',
+    );
     return EmailSendResult(
       success: false,
       errorMessage:
@@ -502,6 +547,10 @@ $coverCell
     required String html,
   }) async {
     try {
+      debugPrint(
+        'EmailService._sendViaCallable: invoking "$_callableName" '
+        '(region=us-central1) for "$to"',
+      );
       final callable = FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable(
@@ -517,10 +566,12 @@ $coverCell
         'html': html,
       });
 
+      debugPrint('EmailService._sendViaCallable: callable returned OK');
       return const EmailSendResult(success: true, delivered: true);
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
-        'EmailService._sendViaCallable: ${e.code} ${e.message} ${e.details}',
+        'EmailService._sendViaCallable: FAILED code=${e.code} '
+        'message="${e.message}" details=${e.details}',
       );
       return EmailSendResult(
         success: false,
@@ -528,7 +579,7 @@ $coverCell
         functionsErrorCode: e.code,
       );
     } catch (e) {
-      debugPrint('EmailService._sendViaCallable: $e');
+      debugPrint('EmailService._sendViaCallable: unexpected error: $e');
       return const EmailSendResult(success: false, errorMessage: null);
     }
   }

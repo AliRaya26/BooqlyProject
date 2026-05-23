@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:booqly/Pages/WelcomePage.dart';
+import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
 import 'firebase_options.dart';
 
@@ -22,6 +24,10 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  if (kIsWeb) {
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  }
+
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
@@ -35,7 +41,7 @@ void main() async {
   ]);
 
   await motivationService.initialize();
-  await motivationService.refreshSchedule();
+  bindMotivationService(motivationService);
 
   runApp(const MyApp());
 }
@@ -82,7 +88,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0E0C0A),
       ),
-      home: const WelcomePage(),
+      home: const AuthGate(),
     );
   }
 }

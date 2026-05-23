@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:booqly/Pages/pdf_reader_page.dart';
@@ -229,21 +228,32 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return 'Reader';
   }
 
-  Future<void> _sendBookCompletedEmail(User user) async {
+  /// Sends the "you finished a book" email and returns a structured result the
+  /// caller can render in the UI. We deliberately do NOT show a snackbar from
+  /// here — earlier versions did, and the snackbar was rendered behind the
+  /// trophy dialog and then destroyed when the page was popped, so the user
+  /// never saw success or failure. The completion dialog now shows this
+  /// result inline instead.
+  Future<_CompletionEmailOutcome> _sendBookCompletedEmail(User user) async {
     final email = user.email?.trim();
     if (email == null || email.isEmpty) {
       debugPrint(
-        'BookDetailPage: skipping completion email — signed-in user has no email.',
+        'BookDetailPage._sendBookCompletedEmail: signed-in user has no email '
+        '(uid=${user.uid}, providers=${user.providerData.map((p) => p.providerId).toList()}). '
+        'Skipping completion email.',
       );
-      _showCompletionEmailMessage(
-        'No email on this account, so no congratulations email was sent.',
+      return const _CompletionEmailOutcome(
+        success: false,
+        message: 'No email on this account, so no congratulations email was sent.',
       );
-      return;
     }
 
     try {
       final firstName = await _readerFirstName(user.uid, user);
-      debugPrint('BookDetailPage: sending completion email to $email');
+      debugPrint(
+        'BookDetailPage._sendBookCompletedEmail: sending to "$email" '
+        '(firstName="$firstName", book="${widget.book.title}")',
+      );
 
       final result = await _emailService.sendBookCompletedEmail(
         toEmail: email,
@@ -256,43 +266,35 @@ class _BookDetailPageState extends State<BookDetailPage> {
       );
 
       if (result.success) {
-        debugPrint('BookDetailPage: completion email sent to $email');
-        _showCompletionEmailMessage(
-          'Congratulations email sent to $email.',
-          isError: false,
+        debugPrint(
+          'BookDetailPage._sendBookCompletedEmail: SENT to "$email" '
+          '(delivered=${result.delivered}, '
+          'queuedInFirestore=${result.queuedInFirestore})',
         );
-        return;
+        return _CompletionEmailOutcome(
+          success: true,
+          message: 'Congratulations email sent to $email.',
+        );
       }
 
       debugPrint(
-        'BookDetailPage: completion email failed: ${result.errorMessage}',
+        'BookDetailPage._sendBookCompletedEmail: FAILED for "$email": '
+        '${result.errorMessage} (code=${result.functionsErrorCode})',
       );
-      _showCompletionEmailMessage(
-        result.errorMessage ??
-            'Could not send congratulations email. See debug log for details.',
+      return _CompletionEmailOutcome(
+        success: false,
+        message: result.errorMessage ??
+            'Could not send congratulations email. Check the debug log.',
       );
     } catch (e, stack) {
-      debugPrint('BookDetailPage._sendBookCompletedEmail error: $e\n$stack');
-      _showCompletionEmailMessage('Could not send congratulations email: $e');
+      debugPrint(
+        'BookDetailPage._sendBookCompletedEmail: unexpected error: $e\n$stack',
+      );
+      return _CompletionEmailOutcome(
+        success: false,
+        message: 'Could not send congratulations email: $e',
+      );
     }
-  }
-
-  void _showCompletionEmailMessage(String message, {bool isError = true}) {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.surface,
-        duration: Duration(seconds: isError ? 8 : 4),
-        content: Text(
-          message,
-          style: GoogleFonts.outfit(
-            color: isError ? Colors.redAccent : AppColors.textPrimary,
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> completeBook() async {
@@ -314,7 +316,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
           "completedAt": Timestamp.now(),
         }, SetOptions(merge: true));
 
-    unawaited(_sendBookCompletedEmail(user));
+    // Kick off the email send before showing the dialog so the dialog can
+    // surface its result inline (success or failure) instead of relying on a
+    // snackbar that gets hidden behind the dialog and lost on navigation.
+    final emailFuture = _sendBookCompletedEmail(user);
 
     if (!mounted) return;
 
@@ -463,7 +468,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   ),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
+
+                // Email status (sending / sent / failed). Lives inside the
+                // dialog so the user actually sees it instead of a snackbar
+                // hidden behind the dialog and then thrown away on pop.
+                _CompletionEmailStatus(emailFuture: emailFuture),
+
+                const SizedBox(height: 22),
 
                 // Close button
                 SizedBox(
@@ -1535,6 +1547,101 @@ class _InfoCard extends StatelessWidget {
             title,
 
             style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Result of attempting to send the "you finished this book" email. Lives at
+/// the file level so it can be passed between `_BookDetailPageState` and the
+/// dialog widget that displays its result.
+class _CompletionEmailOutcome {
+  final bool success;
+  final String message;
+  const _CompletionEmailOutcome({required this.success, required this.message});
+}
+
+/// Inline email-status block shown inside the trophy dialog. While the email
+/// is in flight it shows a small spinner; once the future resolves it shows a
+/// success or failure line so the user knows whether the congratulations
+/// email actually went out.
+class _CompletionEmailStatus extends StatelessWidget {
+  final Future<_CompletionEmailOutcome> emailFuture;
+  const _CompletionEmailStatus({required this.emailFuture});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_CompletionEmailOutcome>(
+      future: emailFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return _row(
+            icon: Icons.mail_outline_rounded,
+            color: AppColors.textMuted,
+            text: 'Sending congratulations email…',
+            showSpinner: true,
+          );
+        }
+
+        final outcome = snapshot.data;
+        if (outcome == null) {
+          return _row(
+            icon: Icons.error_outline_rounded,
+            color: Colors.redAccent,
+            text: 'Could not send congratulations email.',
+          );
+        }
+
+        return _row(
+          icon: outcome.success
+              ? Icons.check_circle_outline_rounded
+              : Icons.error_outline_rounded,
+          color: outcome.success ? AppColors.gold : Colors.redAccent,
+          text: outcome.message,
+        );
+      },
+    );
+  }
+
+  Widget _row({
+    required IconData icon,
+    required Color color,
+    required String text,
+    bool showSpinner = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (showSpinner)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            )
+          else
+            Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),

@@ -8,10 +8,12 @@ class AuthScaffold extends StatelessWidget {
     super.key,
     required this.child,
     this.showBackButton = false,
+    this.onBack,
   });
 
   final Widget child;
   final bool showBackButton;
+  final VoidCallback? onBack;
 
   static const bg = Color(0xFF0E0C0A);
 
@@ -68,7 +70,7 @@ class AuthScaffold extends StatelessWidget {
                             child: IconButton(
                               icon: const Icon(Icons.arrow_back_rounded),
                               color: const Color(0xFFD4A96A),
-                              onPressed: () => Navigator.maybePop(context),
+                              onPressed: onBack ?? () => Navigator.maybePop(context),
                             ),
                           ),
                         child,

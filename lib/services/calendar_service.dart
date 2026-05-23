@@ -29,7 +29,8 @@ class CalendarService {
   static const _prefEmail = 'calendar_email';
   static const _minFreeMinutes = 25;
   static const _dayStartHour = 8;
-  static const _dayEndHour = 22;
+  /// Include evening free time (e.g. gaps after a 9pm event, before midnight).
+  static const _dayEndHour = 24;
 
   GoogleSignIn? _googleSignIn;
 
@@ -51,13 +52,30 @@ class CalendarService {
   /// Current web origin (e.g. http://localhost:54141) — must be in Google Cloud OAuth origins.
   String? get webOrigin => kIsWeb && Uri.base.origin.isNotEmpty ? Uri.base.origin : null;
 
-  Future<bool> isLinked() async {
+  Future<bool> _isLinkedPref() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_prefLinked) == true) {
-      final account = _signIn.currentUser;
-      if (account != null) return true;
+    return prefs.getBool(_prefLinked) == true;
+  }
+
+  /// Restores the Google account session after app restart (silent sign-in).
+  Future<bool> restoreGoogleSession() async {
+    if (!await _isLinkedPref()) return false;
+    if (_signIn.currentUser != null) return true;
+
+    try {
+      final account = await _signIn.signInSilently();
+      return account != null;
+    } catch (e) {
+      debugPrint('CalendarService.restoreGoogleSession: $e');
+      return false;
     }
-    return false;
+  }
+
+  /// True when the user has linked Calendar in Settings (persists across app restarts).
+  Future<bool> isLinked() async {
+    if (!await _isLinkedPref()) return false;
+    await restoreGoogleSession();
+    return true;
   }
 
   Future<String?> linkedEmail() async {
@@ -211,14 +229,17 @@ class CalendarService {
   }
 
   Future<List<FreeTimeSlot>> fetchTodayFreeSlots() async {
-    if (!await isLinked()) return [];
+    if (!await _isLinkedPref()) return [];
+
+    await restoreGoogleSession();
 
     final client = await _signIn.authenticatedClient();
     if (client == null) return [];
 
     final now = DateTime.now();
     final dayStart = DateTime(now.year, now.month, now.day, _dayStartHour);
-    final dayEnd = DateTime(now.year, now.month, now.day, _dayEndHour);
+    final dayEnd =
+        DateTime(now.year, now.month, now.day).add(const Duration(hours: 24));
 
     final api = cal.CalendarApi(client);
     final response = await api.events.list(

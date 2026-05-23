@@ -246,32 +246,62 @@ class _SignupPageState extends State<SignupPage> {
       _showMessage(result.errorMessage!);
     }
 
-    if (result.isNewUser) {
-      final email = result.user?.email ?? '';
-      final name = result.user?.displayName ?? 'Reader';
-      final firstName = name.split(' ').first;
+    // Send the welcome email on every Google sign-up attempt, not just the
+    // very first one. Firebase Auth keeps the user record forever once a
+    // Google account has been used, so `isNewUser` becomes false on every
+    // subsequent test and the email would be silently skipped otherwise.
+    final email = result.user?.email?.trim() ?? '';
+    final name = result.user?.displayName?.trim() ?? '';
+    final firstName = name.isNotEmpty ? name.split(RegExp(r'\s+')).first : 'Reader';
 
-      final welcomeResult = await _emailService.sendWelcomeEmail(
-        toEmail: email,
-        firstName: firstName,
+    debugPrint(
+      'SignupPage._signUpWithGoogle: sending welcome email to "$email" '
+      '(firstName="$firstName", isNewUser=${result.isNewUser})',
+    );
+
+    if (email.isEmpty) {
+      debugPrint(
+        'SignupPage._signUpWithGoogle: Google account has no email, '
+        'skipping welcome email.',
       );
-
-      if (!mounted) return;
       setState(() => _isLoading = false);
-
-      if (!welcomeResult.success) {
-        _showMessage(
-          welcomeResult.errorMessage ??
-              'Account created, but welcome email could not be sent.',
-        );
-      }
-
+      _showMessage(
+        'Signed in, but Google did not return an email so no welcome email was sent.',
+      );
       await _preferencesService.navigateAfterLogin(context);
       return;
     }
 
+    final welcomeResult = await _emailService.sendWelcomeEmail(
+      toEmail: email,
+      firstName: firstName,
+    );
+
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    _showMessage('You already have an account. Signed you in.');
+
+    if (welcomeResult.success) {
+      debugPrint(
+        'SignupPage._signUpWithGoogle: welcome email sent to "$email" '
+        '(delivered=${welcomeResult.delivered}, '
+        'queuedInFirestore=${welcomeResult.queuedInFirestore})',
+      );
+      _showMessage(
+        result.isNewUser
+            ? 'Welcome to Booqly! Confirmation sent to $email.'
+            : 'Welcome back! Confirmation sent to $email.',
+      );
+    } else {
+      debugPrint(
+        'SignupPage._signUpWithGoogle: welcome email FAILED: '
+        '${welcomeResult.errorMessage}',
+      );
+      _showMessage(
+        welcomeResult.errorMessage ??
+            'Signed in, but the welcome email could not be sent.',
+      );
+    }
+
     await _preferencesService.navigateAfterLogin(context);
   }
 

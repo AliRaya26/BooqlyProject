@@ -12,31 +12,31 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'package:booqly/models/free_time_slot.dart';
 import 'package:booqly/services/calendar_service.dart';
-import 'package:booqly/services/email_service.dart';
+import 'package:booqly/services/push_notification_service.dart';
 
-/// Schedules local notifications during calendar free time to nudge reading.
-/// Also sends a parallel email per slot (deduped per day, capped) so the user
-/// gets a heads-up even when their phone is on silent.
+/// Schedules local notifications during calendar free time and syncs slots to
+/// Firestore so a Cloud Function can send push + email every 15 minutes while
+/// the app is closed.
 class ReadingMotivationService {
   ReadingMotivationService({
     CalendarService? calendarService,
     FlutterLocalNotificationsPlugin? notifications,
-    EmailService? emailService,
+    PushNotificationService? pushNotificationService,
   })  : _calendarService = calendarService ?? CalendarService(),
         _notifications = notifications ?? FlutterLocalNotificationsPlugin(),
-        _emailService = emailService ?? EmailService();
+        _pushNotificationService =
+            pushNotificationService ?? PushNotificationService();
 
   static const _prefEnabled = 'motivation_reminders_enabled';
-  static const _prefEmailedSlots = 'motivation_emailed_slots';
-  static const _prefEmailedDate = 'motivation_emailed_date';
   static const _channelId = 'booqly_reading_motivation';
   static const _channelName = 'Reading reminders';
   static const _notificationIdBase = 4200;
-  static const _maxEmailsPerDay = 3;
+  static const _maxScheduledNotifications = 96;
+  static const _nudgeInterval = Duration(minutes: 15);
 
   final CalendarService _calendarService;
   final FlutterLocalNotificationsPlugin _notifications;
-  final EmailService _emailService;
+  final PushNotificationService _pushNotificationService;
   bool _initialized = false;
 
   static const _messages = [
@@ -79,6 +79,7 @@ class ReadingMotivationService {
             AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(channel);
 
+    await _pushNotificationService.initialize();
     _initialized = true;
   }
 
@@ -91,16 +92,23 @@ class ReadingMotivationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefEnabled, enabled);
     if (enabled) {
+      await _pushNotificationService.requestPermission();
       await refreshSchedule();
     } else {
       await cancelAll();
+      await _syncServerNudgeState(enabled: false, slots: const []);
     }
   }
 
   Future<bool> requestNotificationPermission() async {
     if (defaultTargetPlatform == TargetPlatform.android) {
       final status = await Permission.notification.request();
-      return status.isGranted;
+      if (!status.isGranted) return false;
+
+      final androidPlugin =
+          _notifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.requestExactAlarmsPermission();
     }
     final ios = _notifications.resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
@@ -108,129 +116,131 @@ class ReadingMotivationService {
       alert: true,
       badge: true,
     );
-    return granted ?? true;
+    if (granted == false) return false;
+
+    return _pushNotificationService.requestPermission();
   }
 
   Future<void> refreshSchedule() async {
     await initialize();
 
     if (!await areRemindersEnabled()) return;
-    if (!await _calendarService.isLinked()) return;
+    if (!await _calendarService.isLinked()) {
+      debugPrint('ReadingMotivationService.refreshSchedule: calendar not linked');
+      return;
+    }
 
     final allowed = await requestNotificationPermission();
-    if (!allowed) return;
+    if (!allowed) {
+      debugPrint('ReadingMotivationService.refreshSchedule: notifications denied');
+      return;
+    }
 
     await cancelAll();
 
+    await _calendarService.restoreGoogleSession();
     final slots = await _calendarService.fetchTodayFreeSlots();
+    debugPrint(
+      'ReadingMotivationService.refreshSchedule: ${slots.length} free slot(s) today',
+    );
+    await _syncServerNudgeState(enabled: true, slots: slots);
+
     final now = DateTime.now();
     var id = _notificationIdBase;
     final random = Random();
-
-    // Resolve recipient once per refresh; null when not signed in or email
-    // unknown (e.g. anonymous Google auth without profile). Email send is
-    // best-effort and never blocks notification scheduling.
-    final emailTarget = await _resolveEmailTarget();
+    var scheduledCount = 0;
 
     for (final slot in slots) {
-      var notifyAt = slot.start.add(const Duration(minutes: 2));
-      if (notifyAt.isBefore(now)) {
-        if (!slot.contains(now)) continue;
-        notifyAt = now.add(const Duration(minutes: 1));
-      }
-      if (!notifyAt.isBefore(slot.end.subtract(const Duration(minutes: 5)))) {
-        continue;
-      }
+      var notifyAt = slot.start.isBefore(now)
+          ? now.add(const Duration(minutes: 1))
+          : slot.start.add(const Duration(minutes: 2));
 
-      final minutes = slot.duration.inMinutes;
-      final body = _messages[random.nextInt(_messages.length)];
-      final title = minutes >= 60
-          ? 'About $minutes minutes free'
-          : '$minutes min of free time';
+      while (notifyAt.isBefore(slot.end.subtract(const Duration(minutes: 5))) &&
+          id < _notificationIdBase + _maxScheduledNotifications) {
+        if (!notifyAt.isBefore(now)) {
+          final minutes = slot.duration.inMinutes;
+          final body = _messages[random.nextInt(_messages.length)];
+          final title = minutes >= 60
+              ? 'About $minutes minutes free'
+              : '$minutes min of free time';
 
-      await _schedule(
-        id: id++,
-        title: title,
-        body: body,
-        when: notifyAt,
-      );
-
-      if (emailTarget != null) {
-        await _maybeSendNudgeEmail(
-          target: emailTarget,
-          slot: slot,
-          message: body,
-        );
+          await _schedule(
+            id: id++,
+            title: title,
+            body: body,
+            when: notifyAt,
+          );
+          scheduledCount++;
+        }
+        notifyAt = notifyAt.add(_nudgeInterval);
       }
     }
+
+    debugPrint(
+      'ReadingMotivationService.refreshSchedule: scheduled $scheduledCount notification(s)',
+    );
   }
 
-  Future<_EmailTarget?> _resolveEmailTarget() async {
+  Future<void> _syncServerNudgeState({
+    required bool enabled,
+    required List<FreeTimeSlot> slots,
+  }) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      final email = user?.email?.trim();
-      if (user == null || email == null || email.isEmpty) return null;
+      if (user == null) return;
 
-      var firstName = (user.displayName ?? '').trim().split(RegExp(r'\s+')).first;
+      final email = user.email?.trim();
+      var firstName =
+          (user.displayName ?? '').trim().split(RegExp(r'\s+')).first;
       if (firstName.isEmpty) {
         try {
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-          final data = doc.data();
-          firstName = (data?['firstName'] as String?)?.trim() ?? '';
+          final doc =
+              await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          firstName = (doc.data()?['firstName'] as String?)?.trim() ?? '';
         } catch (e) {
           debugPrint('ReadingMotivationService: profile fetch failed: $e');
         }
       }
 
-      return _EmailTarget(email: email, firstName: firstName);
-    } catch (e) {
-      debugPrint('ReadingMotivationService._resolveEmailTarget: $e');
-      return null;
-    }
-  }
-
-  Future<void> _maybeSendNudgeEmail({
-    required _EmailTarget target,
-    required FreeTimeSlot slot,
-    required String message,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = _dayKey(DateTime.now());
-    final storedDate = prefs.getString(_prefEmailedDate);
-    var sentToday = prefs.getStringList(_prefEmailedSlots) ?? const <String>[];
-    if (storedDate != today) {
-      sentToday = const <String>[];
-      await prefs.setString(_prefEmailedDate, today);
-      await prefs.setStringList(_prefEmailedSlots, sentToday);
-    }
-
-    if (sentToday.length >= _maxEmailsPerDay) return;
-    final slotKey = slot.start.toIso8601String();
-    if (sentToday.contains(slotKey)) return;
-
-    try {
-      final result = await _emailService.sendFreeTimeNudgeEmail(
-        toEmail: target.email,
-        firstName: target.firstName,
-        slotStart: slot.start,
-        slotDuration: slot.duration,
-        message: message,
-      );
-
-      if (!result.success) {
-        debugPrint(
-          'ReadingMotivationService: nudge email skipped (${result.errorMessage})',
-        );
-        return;
+      String timezoneName;
+      try {
+        timezoneName = await FlutterTimezone.getLocalTimezone();
+      } catch (_) {
+        timezoneName = tz.local.name;
       }
 
-      final updated = [...sentToday, slotKey];
-      await prefs.setStringList(_prefEmailedSlots, updated);
+      final today = _dayKey(DateTime.now());
+      final payload = <String, dynamic>{
+        'motivationRemindersEnabled': enabled,
+        'timezone': timezoneName,
+        'freeSlotsDate': today,
+        'freeSlotsToday': slots
+            .map(
+              (slot) => {
+                'start': slot.start.toUtc().toIso8601String(),
+                'end': slot.end.toUtc().toIso8601String(),
+              },
+            )
+            .toList(),
+      };
+
+      if (email != null && email.isNotEmpty) {
+        payload['email'] = email;
+      }
+      if (firstName.isNotEmpty) {
+        payload['firstName'] = firstName;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(payload, SetOptions(merge: true));
+
+      if (enabled) {
+        await _pushNotificationService.syncTokenForCurrentUser();
+      }
     } catch (e) {
-      debugPrint('ReadingMotivationService: nudge email failed: $e');
+      debugPrint('ReadingMotivationService._syncServerNudgeState: $e');
     }
   }
 
@@ -261,97 +271,33 @@ class ReadingMotivationService {
         ),
         iOS: const DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
   Future<void> cancelAll() async {
-    for (var id = _notificationIdBase; id < _notificationIdBase + 24; id++) {
+    for (var id = _notificationIdBase;
+        id < _notificationIdBase + _maxScheduledNotifications;
+        id++) {
       await _notifications.cancel(id);
     }
   }
 
-  /// Sends a single nudge email to the currently-signed-in user *now*,
-  /// bypassing all Calendar/slot gating. Returns a [TestNudgeEmailResult]
-  /// describing what actually happened (delivered, queued in Firestore for the
-  /// Trigger Email extension, or failed with a reason).
-  Future<TestNudgeEmailResult> sendTestNudgeEmail() async {
-    final target = await _resolveEmailTarget();
-    if (target == null) {
-      return const TestNudgeEmailResult(
-        status: TestNudgeEmailStatus.notSignedIn,
-        detail: 'No signed-in user with an email. Sign in first.',
-      );
-    }
-
-    final now = DateTime.now();
-    final slot = FreeTimeSlot(
-      start: now,
-      end: now.add(const Duration(minutes: 45)),
-    );
-    final message = _messages[Random().nextInt(_messages.length)];
-
-    final result = await _emailService.sendFreeTimeNudgeEmail(
-      toEmail: target.email,
-      firstName: target.firstName,
-      slotStart: slot.start,
-      slotDuration: slot.duration,
-      message: message,
-    );
-
-    if (!result.success) {
-      return TestNudgeEmailResult(
-        status: TestNudgeEmailStatus.failed,
-        detail: result.errorMessage ?? 'Could not send email.',
-        recipient: target.email,
-      );
-    }
-    if (result.delivered) {
-      return TestNudgeEmailResult(
-        status: TestNudgeEmailStatus.delivered,
-        detail: 'Sent to ${target.email}. Check inbox (and spam).',
-        recipient: target.email,
-      );
-    }
-    if (result.queuedInFirestore) {
-      return TestNudgeEmailResult(
-        status: TestNudgeEmailStatus.queuedInFirestore,
-        detail:
-            'Queued in Firestore for ${target.email}. The "Trigger Email" '
-            'Firebase Extension must be installed to actually send it '
-            '(firebase/EMAIL_SETUP.md).',
-        recipient: target.email,
-      );
-    }
-    return TestNudgeEmailResult(
-      status: TestNudgeEmailStatus.delivered,
-      detail: 'Sent to ${target.email}.',
-      recipient: target.email,
-    );
+  Future<void> disableServerNudgesOnSignOut() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await _pushNotificationService.clearServerPushRegistration(uid);
   }
 }
 
-enum TestNudgeEmailStatus { delivered, queuedInFirestore, failed, notSignedIn }
+/// Shared instance wired from [main.dart] and refreshed after sign-in.
+ReadingMotivationService? _globalMotivationService;
 
-class TestNudgeEmailResult {
-  const TestNudgeEmailResult({
-    required this.status,
-    required this.detail,
-    this.recipient,
-  });
+ReadingMotivationService get motivationService =>
+    _globalMotivationService ??= ReadingMotivationService();
 
-  final TestNudgeEmailStatus status;
-  final String detail;
-  final String? recipient;
-
-  bool get isSuccess => status == TestNudgeEmailStatus.delivered;
-}
-
-class _EmailTarget {
-  const _EmailTarget({required this.email, required this.firstName});
-
-  final String email;
-  final String firstName;
+void bindMotivationService(ReadingMotivationService service) {
+  _globalMotivationService = service;
 }

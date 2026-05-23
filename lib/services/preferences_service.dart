@@ -6,6 +6,7 @@ import 'package:booqly/Pages/ReadingPreferencesPage.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/models/reading_preferences_model.dart';
 import 'package:booqly/services/book_service.dart';
+import 'package:booqly/widgets/auth_gate.dart';
 
 class PreferencesService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -227,6 +228,15 @@ class PreferencesService {
     }
 
     if (!context.mounted) return;
+
+    AuthNavigationController.instance.cachePreferencesCompleted(completed);
+
+    // AuthGate owns routing when login/signup started from Welcome or switch-account.
+    if (!Navigator.of(context).canPop() ||
+        AuthNavigationController.instance.showLoginScreen.value) {
+      AuthNavigationController.instance.clearLoginScreenRequest();
+      return;
+    }
 
     if (completed) {
       Navigator.pushReplacement(

@@ -272,7 +272,14 @@ class AuthService {
     }
   }
 
-  /// Sends password-reset email (Resend via Cloud Function, or Firebase fallback).
+  /// Sends password-reset email. Tries the `sendPasswordResetEmail` Cloud
+  /// Function first (Gmail SMTP via nodemailer with our custom Booqly
+  /// template), and falls back to Firebase Auth's built-in reset email when
+  /// the function isn't reachable (`unavailable` / `internal` / network error
+  /// / not deployed). Definitive errors from the function — `not-found`,
+  /// `failed-precondition`, `invalid-argument` — are returned as-is so the
+  /// caller can show a precise message instead of pretending an email was
+  /// sent.
   Future<String?> sendPasswordResetEmail(String email) async {
     final trimmedEmail = email.trim();
     if (!isValidEmailFormat(trimmedEmail)) {
@@ -284,11 +291,23 @@ class AuthService {
     );
     if (result.success) return null;
 
+    // The Cloud Function gives a definitive answer for these codes. Falling
+    // back to Firebase's built-in reset on `not-found` or `failed-precondition`
+    // would silently succeed (email-enumeration protection) and trick the user
+    // into thinking an email is on the way that will never arrive.
     final code = result.functionsErrorCode;
-    final shouldFallback = code == 'not-found' ||
-        code == 'unavailable' ||
-        (result.errorMessage?.toLowerCase().contains('deploy') ?? false);
+    final isDefinitive = code == 'not-found' ||
+        code == 'failed-precondition' ||
+        code == 'invalid-argument';
+    if (isDefinitive) {
+      return result.errorMessage ?? 'Could not send reset email.';
+    }
 
+    // Only fall back when the Cloud Function itself isn't reachable.
+    final shouldFallback = code == null ||
+        code == 'unavailable' ||
+        code == 'internal' ||
+        (result.errorMessage?.toLowerCase().contains('deploy') ?? false);
     if (!shouldFallback) {
       return result.errorMessage ?? 'Could not send reset email.';
     }

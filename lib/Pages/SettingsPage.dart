@@ -1,9 +1,10 @@
 import 'package:booqly/Pages/HomePage.dart';
-import 'package:booqly/Pages/WelcomePage.dart';
 import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/calendar_service.dart';
 import 'package:booqly/services/google_oauth_config.dart';
+import 'package:booqly/services/preferences_service.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
+import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/widgets/calendar_link_web_dialog.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -30,11 +31,11 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _loading = true;
   bool _linking = false;
   bool _loggingOut = false;
+  bool _switchingAccount = false;
   bool _calendarLinked = false;
   String? _calendarEmail;
   bool _remindersEnabled = true;
   bool _hasOAuthConfig = false;
-  bool _sendingTestEmail = false;
 
   @override
   void initState() {
@@ -175,23 +176,136 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (value && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Free-time reading nudges enabled.')),
+        const SnackBar(
+          content: Text(
+            'Free-time nudges enabled. Push and email reminders run every 15 minutes during free blocks, even when Booqly is closed.',
+          ),
+        ),
       );
     }
   }
 
-  Future<void> _sendTestNudgeEmail() async {
-    if (_sendingTestEmail) return;
-    setState(() => _sendingTestEmail = true);
-    final result = await _motivationService.sendTestNudgeEmail();
-    if (!mounted) return;
-    setState(() => _sendingTestEmail = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result.detail),
-        duration: const Duration(seconds: 8),
+  Future<void> _prepareForAuthChange() async {
+    await _calendarService.unlinkAccount();
+    await _motivationService.cancelAll();
+    await _motivationService.disableServerNudgesOnSignOut();
+    AuthNavigationController.instance.clearSignedInCache();
+  }
+
+  Future<void> _switchAccount() async {
+    if (_switchingAccount || _loggingOut) return;
+
+    final choice = await showModalBottomSheet<_SwitchAccountChoice>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Switch account',
+                style: GoogleFonts.cormorantGaramond(
+                  fontSize: 26,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Sign in with a different Booqly account. Your current session will end.',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.mail_outline_rounded, color: AppColors.gold),
+                title: Text(
+                  'Sign in with email',
+                  style: GoogleFonts.outfit(color: AppColors.textPrimary),
+                ),
+                onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.email),
+              ),
+              ListTile(
+                leading: const Icon(Icons.g_mobiledata, color: AppColors.gold, size: 28),
+                title: Text(
+                  'Continue with Google',
+                  style: GoogleFonts.outfit(color: AppColors.textPrimary),
+                ),
+                onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.google),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+    if (choice == null || !mounted) return;
+
+    setState(() => _switchingAccount = true);
+    await _prepareForAuthChange();
+
+    if (choice == _SwitchAccountChoice.google) {
+      final configError = GoogleOAuthConfig.mismatchMessage;
+      if (configError != null) {
+        if (mounted) {
+          setState(() => _switchingAccount = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(configError)),
+          );
+        }
+        return;
+      }
+
+      await _authService.signOut();
+      final result = await _authService.signInWithGoogle(forceAccountPicker: true);
+      if (!mounted) return;
+
+      if (!result.isSuccess) {
+        setState(() => _switchingAccount = false);
+        AuthNavigationController.instance.requestLoginScreen();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.errorMessage ?? 'Google sign-in failed.')),
+        );
+        return;
+      }
+
+      if (result.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.errorMessage!)),
+        );
+      }
+
+      final prefs = PreferencesService();
+      final completed = await prefs
+          .hasCompletedPreferences(result.user!.uid)
+          .catchError((_) => false);
+      AuthNavigationController.instance.cachePreferencesCompleted(completed);
+      setState(() => _switchingAccount = false);
+      return;
+    }
+
+    await _authService.signOut();
+    if (!mounted) return;
+    AuthNavigationController.instance.requestLoginScreen();
+    setState(() => _switchingAccount = false);
   }
 
   Future<void> _logout() async {
@@ -225,13 +339,11 @@ class _SettingsPageState extends State<SettingsPage> {
     if (confirm != true) return;
 
     setState(() => _loggingOut = true);
+    await _prepareForAuthChange();
+    AuthNavigationController.instance.clearLoginScreenRequest();
     await _authService.signOut();
     if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const WelcomePage()),
-      (_) => false,
-    );
+    setState(() => _loggingOut = false);
   }
 
   @override
@@ -354,33 +466,30 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 12),
                 _hintCard(
-                  'Booqly checks today\'s calendar (8am–10pm) for gaps of 25+ minutes and sends a gentle reminder at the start of each block. An email goes out alongside each notification (max 3/day).',
+                  'Nudges fire during free gaps between calendar events (8am–midnight, 25+ minutes) — not at event times. Example: with a 9pm event, you\'ll get reminders during the open time before it. Local alerts repeat every 15 minutes in each gap. Push/email when the app is closed need Cloud Functions deployed (scripts/deploy-email.ps1).',
                 ),
-                if (kDebugMode) ...[
-                  const SizedBox(height: 12),
-                  _SettingsTile(
-                    icon: Icons.mark_email_unread_outlined,
-                    title: 'Send test nudge email',
-                    subtitle:
-                        'Dev-only: bypass Calendar and fire a nudge to your signed-in email.',
-                    trailing: _sendingTestEmail
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.gold,
-                            ),
-                          )
-                        : Icon(
-                            Icons.send_rounded,
-                            color: AppColors.gold.withValues(alpha: 0.9),
-                          ),
-                    onTap: _sendingTestEmail ? null : _sendTestNudgeEmail,
-                  ),
-                ],
                 const SizedBox(height: 28),
                 _sectionLabel('Account'),
+                const SizedBox(height: 10),
+                _SettingsTile(
+                  icon: Icons.switch_account_outlined,
+                  title: 'Switch account',
+                  subtitle: 'Sign in with a different Booqly account',
+                  trailing: _switchingAccount
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.gold,
+                          ),
+                        )
+                      : Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.gold.withValues(alpha: 0.9),
+                        ),
+                  onTap: _switchingAccount ? null : _switchAccount,
+                ),
                 const SizedBox(height: 10),
                 _SettingsTile(
                   icon: Icons.logout_rounded,
@@ -437,6 +546,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 }
+
+enum _SwitchAccountChoice { email, google }
 
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({

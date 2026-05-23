@@ -12,10 +12,15 @@ import 'package:booqly/services/feedback_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 
 class GeminiApiException implements Exception {
-  GeminiApiException(this.message, {this.isInvalidKey = false});
+  GeminiApiException(
+    this.message, {
+    this.isInvalidKey = false,
+    this.isQuotaExceeded = false,
+  });
 
   final String message;
   final bool isInvalidKey;
+  final bool isQuotaExceeded;
 
   @override
   String toString() => message;
@@ -63,19 +68,28 @@ class GeminiChatService {
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
 
-  /// Models tried in order until one works (free-tier friendly first).
+  /// Models tried in order until one works (lite first — separate free-tier quotas).
   static const _modelIds = [
-    'gemini-2.5-flash',
-    'gemini-flash-lite-latest',
-    'gemini-flash-latest',
     'gemini-2.5-flash-lite',
     'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-flash-lite-latest',
+    'gemini-2.5-flash',
   ];
 
   String? _systemPrompt;
   String? _activeModel;
   BookChatContext? _context;
   final List<Map<String, dynamic>> _history = [];
+
+  String? get preferredModel {
+    const fromDefine = String.fromEnvironment('GEMINI_MODEL');
+    if (fromDefine.trim().isNotEmpty) return fromDefine.trim();
+
+    final fromEnv = dotenv.env['GEMINI_MODEL']?.trim();
+    if (fromEnv != null && fromEnv.isNotEmpty) return fromEnv;
+    return null;
+  }
 
   String get apiKey {
     const fromDefine = String.fromEnvironment('GEMINI_API_KEY');
@@ -370,9 +384,16 @@ class GeminiChatService {
       };
     }
 
-    final modelsToTry = _activeModel != null
-        ? [_activeModel!, ..._modelIds.where((m) => m != _activeModel)]
+    final fallbackModels = preferredModel != null
+        ? [
+            preferredModel!,
+            ..._modelIds.where((m) => m != preferredModel),
+          ]
         : _modelIds;
+
+    final modelsToTry = _activeModel != null
+        ? [_activeModel!, ...fallbackModels.where((m) => m != _activeModel)]
+        : fallbackModels;
 
     Object? lastError;
 
@@ -383,6 +404,9 @@ class GeminiChatService {
         return text;
       } on GeminiApiException catch (e) {
         if (e.isInvalidKey) rethrow;
+        if (e.isQuotaExceeded && _activeModel == model) {
+          _activeModel = null;
+        }
         lastError = e;
         debugPrint('Gemini model $model failed: ${e.message}');
       } catch (e) {
@@ -450,7 +474,10 @@ class GeminiChatService {
       }
 
       if (response.statusCode == 429 || lower.contains('quota')) {
-        throw GeminiApiException('Quota exceeded for $model');
+        throw GeminiApiException(
+          'Quota exceeded for $model',
+          isQuotaExceeded: true,
+        );
       }
 
       if (response.statusCode == 503 ||
