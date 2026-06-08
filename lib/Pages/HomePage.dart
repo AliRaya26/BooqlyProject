@@ -1,12 +1,14 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:booqly/Pages/BookChatPage.dart';
+import 'package:booqly/Pages/DiscoverPage.dart';
 import 'package:booqly/Pages/LibraryPage.dart';
-import 'package:booqly/Pages/SearchByTitlePage.dart';
+import 'package:booqly/Pages/SearchByTitlePage.dart' hide AppColors;
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
+import 'package:booqly/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,33 +19,7 @@ import 'package:booqly/services/feedback_seed_service.dart';
 import 'package:booqly/Pages/ManualEntryPage.dart';
 import 'dart:async';
 
-// ─── Theme ───────────────────────────────────────────────────────────────────
-
-class AppColors {
-  static const bg = Color(0xFF0E0C0A);
-  static const surface = Color(0xFF1A1713);
-  static const navBar = Color(0xFF141210);
-  static const gold = Color(0xFFD4A96A);
-  static const goldMuted = Color(0x1FD4A96A);
-  static const goldDim = Color(0x4DD4A96A);
-  static const textPrimary = Color(0xFFF5F0E8);
-  static const textSecondary = Color(0x80FFFFFF);
-  static const textMuted = Color(0x4DFFFFFF);
-  static const border = Color(0x0FFFFFFF);
-  static const borderDash = Color(0x4DD4A96A);
-  static const dayDone = gold;
-  static const chipBorder = Color(0x1FFFFFFF);
-
-  static const coverAmber = Color(0xFF2C1F0E);
-  static const coverBlue = Color(0xFF151C24);
-  static const coverPurple = Color(0xFF1A1424);
-  static const coverGreen = Color(0xFF0F1F18);
-
-  static const spineAmber = Color(0xFFD4A96A);
-  static const spineBlue = Color(0xFF5B8DD9);
-  static const spinePurple = Color(0xFF9B7FD4);
-  static const spineGreen = Color(0xFF4A9E7A);
-}
+// ─── Book cover widget ────────────────────────────────────────────────────────
 
 class BookCover extends StatelessWidget {
   final String url;
@@ -61,27 +37,35 @@ class BookCover extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget child;
 
+    final c = AppColors.of(context);
     if (url.trim().isEmpty) {
       child = Container(
-        color: AppColors.surface,
-        child: const Icon(Icons.menu_book_rounded),
+        color: c.surfaceAlt,
+        child: Icon(Icons.menu_book_rounded, color: c.textMuted),
       );
     } else if (url.startsWith('http')) {
       child = Image.network(
         url,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Container(
-          color: AppColors.surface,
-          child: const Icon(Icons.broken_image),
+          color: c.surfaceAlt,
+          child: Icon(Icons.broken_image, color: c.textMuted),
+        ),
+      );
+    } else if (kIsWeb) {
+      child = Container(
+        color: c.surfaceAlt,
+        child: Center(
+          child: Icon(Icons.image_not_supported_rounded, color: c.textMuted),
         ),
       );
     } else {
       child = Image.file(
         File(url),
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
-          color: AppColors.surface,
-          child: const Icon(Icons.broken_image),
+        errorBuilder: (ctx, err, stack) => Container(
+          color: c.surfaceAlt,
+          child: Icon(Icons.broken_image, color: c.textMuted),
         ),
       );
     }
@@ -90,7 +74,7 @@ class BookCover extends StatelessWidget {
       width: width,
       height: height,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: FittedBox(
           fit: BoxFit.cover,
           clipBehavior: Clip.hardEdge,
@@ -135,36 +119,6 @@ class WeekDay {
 
 List<WeekDay> streakWeek = [];
 
-// ─── App Root ─────────────────────────────────────────────────────────────────
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ),
-  );
-  runApp(const ReadlyApp());
-}
-
-class ReadlyApp extends StatelessWidget {
-  const ReadlyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Booqly',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: AppColors.bg,
-        colorScheme: const ColorScheme.dark(primary: AppColors.gold),
-      ),
-      home: const HomePage(),
-    );
-  }
-}
-
 // ─── Home Page ────────────────────────────────────────────────────────────────
 
 class HomePage extends StatefulWidget {
@@ -180,15 +134,14 @@ class _HomePageState extends State<HomePage> {
   BookModel? continueBook;
   bool isLoadingContinue = true;
 
-  // ── Add this at the top of _HomePageState ──
   StreamSubscription? _librarySubscription;
 
   @override
   void initState() {
     super.initState();
-    _listenToContinueReading(); // ← stream instead of one-time fetch
-    _listenToWantToRead(); // ← stream for want-to-read list as well
-    _listenToStreak(); // ← load streak once on init (can be refreshed manually if needed)
+    _listenToContinueReading();
+    _listenToWantToRead();
+    _listenToStreak();
     _seedDummyFeedbacks();
   }
 
@@ -205,8 +158,8 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _librarySubscription?.cancel();
     _wantToReadSub?.cancel();
-    super.dispose();
     _streakSub?.cancel();
+    super.dispose();
   }
 
   void _listenToContinueReading() {
@@ -233,7 +186,6 @@ class _HomePageState extends State<HomePage> {
             return;
           }
 
-          // Sort by lastReadAt descending — most recent first
           final sorted = [...snapshot.docs]
             ..sort((a, b) {
               final aData = a.data();
@@ -285,7 +237,7 @@ class _HomePageState extends State<HomePage> {
               });
             }
           } catch (e) {
-            debugPrint('❌ stream book fetch error: $e');
+            debugPrint('stream book fetch error: $e');
             if (mounted) {
               setState(() {
                 continueBook = null;
@@ -298,25 +250,18 @@ class _HomePageState extends State<HomePage> {
 
   List<WeekDay> _buildWeekDays(List<Timestamp> timestamps) {
     final now = DateTime.now();
-
-    // start of week (Monday)
     final monday = now.subtract(Duration(days: now.weekday - 1));
-
-    // convert timestamps to readable days
     final readDays = timestamps.map((t) {
       final d = t.toDate();
       return DateTime(d.year, d.month, d.day);
     }).toSet();
 
     List<WeekDay> result = [];
-
     final labels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
     for (int i = 0; i < 7; i++) {
       final dayDate = DateTime(monday.year, monday.month, monday.day + i);
-
       final normalized = DateTime(dayDate.year, dayDate.month, dayDate.day);
-
       DayStatus status;
 
       if (normalized.isAfter(DateTime(now.year, now.month, now.day))) {
@@ -338,6 +283,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   StreamSubscription? _streakSub;
+  int _streakCount = 0;
 
   void _listenToStreak() {
     final user = FirebaseAuth.instance.currentUser;
@@ -349,12 +295,28 @@ class _HomePageState extends State<HomePage> {
         .collection('library')
         .snapshots()
         .listen((snapshot) {
-          List<Timestamp> timestamps = [];
+          final List<Timestamp> timestamps = [];
 
           for (var doc in snapshot.docs) {
             final data = doc.data();
             if (data['lastReadAt'] != null) {
-              timestamps.add(data['lastReadAt']);
+              timestamps.add(data['lastReadAt'] as Timestamp);
+            }
+          }
+
+          final readDays = timestamps.map((t) {
+            final d = t.toDate();
+            return DateTime(d.year, d.month, d.day);
+          }).toSet();
+
+          final today = DateTime.now();
+          int streak = 0;
+          for (int i = 0; i < 365; i++) {
+            final day = today.subtract(Duration(days: i));
+            if (readDays.contains(DateTime(day.year, day.month, day.day))) {
+              streak++;
+            } else {
+              break;
             }
           }
 
@@ -362,6 +324,7 @@ class _HomePageState extends State<HomePage> {
 
           setState(() {
             streakWeek = _buildWeekDays(timestamps);
+            _streakCount = streak;
           });
         });
   }
@@ -407,10 +370,7 @@ class _HomePageState extends State<HomePage> {
               coverUrl: bookData['coverUrl'] ?? '',
               pdfUrl: bookData['pdfUrl'] ?? '',
               totalPages: bookData['totalPages'] ?? 0,
-              progress: (libraryData['progress'] ?? 0).toDouble().clamp(
-                0.0,
-                1.0,
-              ),
+              progress: (libraryData['progress'] ?? 0).toDouble().clamp(0.0, 1.0),
               currentPage: libraryData['currentPage'] ?? 0,
             );
           });
@@ -427,110 +387,7 @@ class _HomePageState extends State<HomePage> {
         });
   }
 
-  // Keep _refresh for the card buttons (still useful for progress update after PdfReaderPage)
-  Future<void> _refresh() async {} // stream handles updates automatically now
-
-  // ── Fetch the most recently read "reading" book ──
-  Future<void> fetchContinueReadingBook() async {
-    // Reset loading so UI shows spinner on re-fetch
-    if (mounted) setState(() => isLoadingContinue = true);
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        if (mounted) setState(() => isLoadingContinue = false);
-        return;
-      }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('library')
-          .where('status', isEqualTo: 'reading')
-          .get();
-
-      if (snapshot.docs.isEmpty) {
-        if (mounted) {
-          setState(() {
-            continueBook = null;
-            isLoadingContinue = false;
-          });
-        }
-        return;
-      }
-
-      // Sort manually — safe even when lastReadAt is missing
-      snapshot.docs.sort((a, b) {
-        final aData = a.data();
-        final bData = b.data();
-        final aTime = (aData['lastReadAt'] as Timestamp?) ?? Timestamp(0, 0);
-        final bTime = (bData['lastReadAt'] as Timestamp?) ?? Timestamp(0, 0);
-        return bTime.compareTo(aTime);
-      });
-
-      final doc = snapshot.docs.first;
-      final bookId = doc.id;
-      final libraryData = doc.data();
-
-      final bookDoc = await FirebaseFirestore.instance
-          .collection('books')
-          .doc(bookId)
-          .get();
-
-      if (!bookDoc.exists) {
-        if (mounted) {
-          setState(() {
-            continueBook = null;
-            isLoadingContinue = false;
-          });
-        }
-        return;
-      }
-
-      final bookData = bookDoc.data()!;
-
-      if (mounted) {
-        setState(() {
-          continueBook = BookModel(
-            id: bookDoc.id,
-            title: bookData['title'] ?? '',
-            author: bookData['author'] ?? '',
-            description: bookData['description'] ?? '',
-            category: bookData['category'] ?? '',
-            coverUrl: bookData['coverUrl'] ?? '',
-            pdfUrl: bookData['pdfUrl'] ?? '',
-            totalPages: bookData['totalPages'] ?? 0,
-            progress: (libraryData['progress'] ?? 0).toDouble(),
-            currentPage: libraryData['currentPage'] ?? 0,
-          );
-          isLoadingContinue = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ fetchContinueReadingBook error: $e');
-      if (mounted) {
-        setState(() {
-          continueBook = null;
-          isLoadingContinue = false;
-        });
-      }
-    }
-  }
-
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   fetchContinueReadingBook();
-  // }
-
-  TextStyle get _outfit => GoogleFonts.outfit();
-  TextStyle get _cormorant => GoogleFonts.cormorantGaramond();
-
-  // ── Called after returning from any sub-page ──
-  // Future<void> _refresh() => fetchContinueReadingBook();
-
-  // ─── Page switcher ───────────────────────────────────────────────────────
+  Future<void> _refresh() async {}
 
   Widget _buildPageContent() {
     switch (_navIndex) {
@@ -541,33 +398,33 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _TopBar(),
-              _HeroGreeting(cormorant: _cormorant, outfit: _outfit),
-              const _Divider(),
+              const SizedBox(height: 20),
               _ContinueReadingSection(
-                cormorant: _cormorant,
-                outfit: _outfit,
                 book: continueBook,
                 isLoading: isLoadingContinue,
                 onRefresh: _refresh,
               ),
-              _StreakSection(cormorant: _cormorant, outfit: _outfit),
+              const SizedBox(height: 28),
+              _StreakSection(streakCount: _streakCount),
+              const SizedBox(height: 28),
               _WantToReadSection(
                 books: wantToReadBooks,
                 isLoading: isLoadingWantToRead,
-                cormorant: _cormorant,
-                outfit: _outfit,
               ),
-              _MonthlyStatsSection(outfit: _outfit),
+              const SizedBox(height: 28),
+              _MonthlyStatsSection(),
               const SizedBox(height: 12),
             ],
           ),
         );
 
       case 1:
-        return const LibraryPage();
+        return const DiscoverPage();
       case 2:
-        return const BookChatPage();
+        return const LibraryPage();
       case 3:
+        return const BookChatPage();
+      case 4:
         return const SettingsPage(embeddedInTab: true);
       default:
         return const SizedBox.shrink();
@@ -576,8 +433,18 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: c.bg,
+      // FAB only on the Library tab (index 2)
+      floatingActionButton: _navIndex == 2
+          ? FloatingActionButton(
+              onPressed: () => _showAddBottomSheet(context),
+              backgroundColor: c.brand,
+              elevation: 3,
+              child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            )
+          : null,
       body: Stack(
         children: [
           _buildPageContent(),
@@ -588,8 +455,6 @@ class _HomePageState extends State<HomePage> {
             child: _BottomNav(
               selectedIndex: _navIndex,
               onTap: (i) => setState(() => _navIndex = i),
-              outfit: _outfit,
-              onAddTap: () => _showAddBottomSheet(context),
             ),
           ),
         ],
@@ -601,96 +466,87 @@ class _HomePageState extends State<HomePage> {
 // ─── Add Book Bottom Sheet ────────────────────────────────────────────────────
 
 void _showAddBottomSheet(BuildContext context) {
+  final c = AppColors.of(context);
   showModalBottomSheet(
     context: context,
-    backgroundColor: AppColors.surface,
+    backgroundColor: c.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.textMuted,
-                borderRadius: BorderRadius.circular(2),
+    builder: (ctx) {
+      final cc = AppColors.of(ctx);
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cc.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Add a book',
-            style: GoogleFonts.outfit(
-              fontSize: 22,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _addTile(
-            context,
-            icon: Icons.search_rounded,
-            label: 'Search by title',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SearchByTitlePage()),
-              );
-            },
-          ),
-          _addTile(
-            context,
-            icon: Icons.qr_code_scanner_rounded,
-            label: 'Scan ISBN barcode',
-            onTap: () => Navigator.pop(context),
-          ),
-          _addTile(
-            context,
-            icon: Icons.edit_rounded,
-            label: 'Manual entry',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ManualEntryPage()),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+            const SizedBox(height: 20),
+            Text('Add a book',
+                style: GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: cc.text)),
+            const SizedBox(height: 16),
+            _addTile(ctx, icon: Icons.search_rounded, label: 'Search by title',
+                onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SearchByTitlePage()));
+            }),
+            _addTile(ctx,
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Scan ISBN barcode', onTap: () {
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                backgroundColor: cc.surface,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                content: Text('ISBN scanning coming soon',
+                    style: GoogleFonts.outfit(color: cc.text)),
+                duration: const Duration(seconds: 2),
+              ));
+            }),
+            _addTile(ctx, icon: Icons.edit_rounded, label: 'Manual entry',
+                onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ManualEntryPage()));
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
   );
 }
 
-Widget _addTile(
-  BuildContext context, {
-  required IconData icon,
-  required String label,
-  required VoidCallback onTap,
-}) {
+Widget _addTile(BuildContext context,
+    {required IconData icon,
+    required String label,
+    required VoidCallback onTap}) {
+  final c = AppColors.of(context);
   return ListTile(
     contentPadding: EdgeInsets.zero,
     leading: Container(
       width: 40,
       height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.goldMuted,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: AppColors.gold, size: 18),
+      decoration:
+          BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(10)),
+      child: Icon(icon, color: c.brand, size: 18),
     ),
-    title: Text(
-      label,
-      style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textPrimary),
-    ),
+    title: Text(label, style: GoogleFonts.outfit(fontSize: 14, color: c.text)),
     onTap: onTap,
   );
 }
@@ -700,74 +556,39 @@ Widget _addTile(
 class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        22,
-        MediaQuery.of(context).padding.top + 12,
-        22,
-        0,
-      ),
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 16, 20, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Booqly',
-            style: GoogleFonts.outfit(
-              fontSize: 12,
-              color: AppColors.textMuted,
-              letterSpacing: 0.05,
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(greeting,
+                style: GoogleFonts.outfit(
+                    fontSize: 22, fontWeight: FontWeight.w600, color: c.text)),
+            Text('Keep reading',
+                style: GoogleFonts.outfit(fontSize: 13, color: c.textSub)),
+          ]),
+          GestureDetector(
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                  color: c.surface,
+                  shape: BoxShape.circle,
+                  boxShadow: cardShadow(context)),
+              child: Icon(Icons.settings_outlined, color: c.textSub, size: 20),
             ),
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.settings_outlined,
-                  color: AppColors.textMuted,
-                  size: 22,
-                ),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsPage(),
-                    ),
-                  );
-                },
-              ),
-            ],
           ),
         ],
       ),
     );
   }
-}
-
-// ─── Hero Greeting ────────────────────────────────────────────────────────────
-
-class _HeroGreeting extends StatelessWidget {
-  const _HeroGreeting({required this.cormorant, required this.outfit});
-  final TextStyle cormorant;
-  final TextStyle outfit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start),
-    );
-  }
-}
-
-// ─── Divider ─────────────────────────────────────────────────────────────────
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 1,
-    margin: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-    color: AppColors.border,
-  );
 }
 
 // ─── Section Label ────────────────────────────────────────────────────────────
@@ -777,83 +598,74 @@ class _SectionLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
-    child: Text(
-      text.toUpperCase(),
-      style: GoogleFonts.outfit(
-        fontSize: 10,
-        letterSpacing: 0.14,
-        color: AppColors.textMuted,
-        fontWeight: FontWeight.w500,
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Text(
+        text.toUpperCase(),
+        style: GoogleFonts.outfit(
+            fontSize: 11,
+            letterSpacing: 0.08,
+            color: c.textMuted,
+            fontWeight: FontWeight.w600),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // ─── Continue Reading ─────────────────────────────────────────────────────────
 
 class _ContinueReadingSection extends StatelessWidget {
   const _ContinueReadingSection({
-    required this.cormorant,
-    required this.outfit,
     required this.book,
     required this.isLoading,
-    required this.onRefresh, // ✅ callback to re-fetch after navigation
+    required this.onRefresh,
   });
 
-  final TextStyle cormorant;
-  final TextStyle outfit;
   final BookModel? book;
   final bool isLoading;
   final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+
     if (isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: CircularProgressIndicator(color: AppColors.gold),
-        ),
-      );
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: CircularProgressIndicator(color: c.brand)));
     }
 
     if (book == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionLabel('Continue reading'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Center(
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.menu_book_rounded,
-                      color: AppColors.textMuted,
-                      size: 42,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Start reading a book to continue here',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(color: AppColors.textMuted),
-                    ),
-                  ],
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _SectionLabel('Continue reading'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: cardShadow(context)),
+            child: Center(
+              child: Column(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(color: c.brandSoft, shape: BoxShape.circle),
+                  child: Icon(Icons.menu_book_rounded, color: c.brand, size: 24),
                 ),
-              ),
+                const SizedBox(height: 12),
+                Text('Pick a book to start',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: c.textSub, fontSize: 14)),
+              ]),
             ),
           ),
-        ],
-      );
+        ),
+      ]);
     }
 
     return Column(
@@ -861,13 +673,8 @@ class _ContinueReadingSection extends StatelessWidget {
       children: [
         const _SectionLabel('Continue reading'),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: _ContinueReadingCard(
-            cormorant: cormorant,
-            outfit: outfit,
-            book: book!,
-            onRefresh: onRefresh,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _ContinueReadingCard(book: book!, onRefresh: onRefresh),
         ),
       ],
     );
@@ -876,18 +683,13 @@ class _ContinueReadingSection extends StatelessWidget {
 
 class _ContinueReadingCard extends StatelessWidget {
   const _ContinueReadingCard({
-    required this.cormorant,
-    required this.outfit,
     required this.book,
     required this.onRefresh,
   });
 
-  final TextStyle cormorant;
-  final TextStyle outfit;
   final BookModel book;
   final Future<void> Function() onRefresh;
 
-  // ── Navigate to BookDetailPage and refresh on return ──
   Future<void> _openDetail(BuildContext context) async {
     await Navigator.push(
       context,
@@ -896,7 +698,6 @@ class _ContinueReadingCard extends StatelessWidget {
     await onRefresh();
   }
 
-  // ── Navigate straight to PDF reader and refresh on return ──
   Future<void> _resumeReading(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -918,173 +719,80 @@ class _ContinueReadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     final pct = (book.progress * 100).round();
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Stack(
-        children: [
-          // Decorative orb
-          Positioned(
-            top: -40,
-            right: -40,
-            child: Container(
-              width: 130,
-              height: 130,
-              decoration: const BoxDecoration(
-                color: AppColors.goldMuted,
-                shape: BoxShape.circle,
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: cardShadow(context)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          GestureDetector(
+              onTap: () => _openDetail(context),
+              child: BookCover(url: book.coverUrl, width: 64, height: 92)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                    color: c.brandSoft, borderRadius: BorderRadius.circular(100)),
+                child: Text('IN PROGRESS',
+                    style: GoogleFonts.outfit(
+                        fontSize: 9,
+                        letterSpacing: 0.10,
+                        color: c.brand,
+                        fontWeight: FontWeight.w600)),
               ),
-            ),
-          ),
-
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ✅ Tappable cover → BookDetailPage
-                  GestureDetector(
-                    onTap: () => _openDetail(context),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: BookCover(
-                        url: book.coverUrl,
-                        width: 68,
-                        height: 96,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 14),
-
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.goldMuted,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'In progress',
-                            style: GoogleFonts.outfit(
-                              fontSize: 9,
-                              letterSpacing: 0.10,
-                              color: AppColors.gold,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        // ✅ Tappable title → BookDetailPage
-                        GestureDetector(
-                          onTap: () => _openDetail(context),
-                          child: Text(
-                            book.title,
-                            style: GoogleFonts.outfit(
-                              fontSize: 19,
-                              color: const Color.fromARGB(173, 245, 240, 232),
-                              height: 1.2,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 3),
-
-                        Text(
-                          book.author,
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'p. ${book.currentPage} / ${book.totalPages}',
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                            Text(
-                              '$pct%',
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                color: AppColors.gold,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 6),
-
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: book.progress,
-                            minHeight: 3,
-                            backgroundColor: const Color(0x14FFFFFF),
-                            valueColor: const AlwaysStoppedAnimation(
-                              AppColors.gold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // ✅ Resume reading → PdfReaderPage directly
-              SizedBox(
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: () => _resumeReading(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.gold,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Resume reading',
-                      style: GoogleFonts.outfit(
-                        fontSize: 13,
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => _openDetail(context),
+                child: Text(book.title,
+                    style: GoogleFonts.outfit(
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.bg,
-                        letterSpacing: 0.02,
-                      ),
-                    ),
-                  ),
+                        color: c.text,
+                        height: 1.2)),
+              ),
+              const SizedBox(height: 3),
+              Text(book.author,
+                  style: GoogleFonts.outfit(fontSize: 12, color: c.textSub)),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: book.progress,
+                  minHeight: 4,
+                  backgroundColor: c.brandMid,
+                  valueColor: AlwaysStoppedAnimation(c.brand),
                 ),
               ),
-            ],
+              const SizedBox(height: 6),
+              Text('p.${book.currentPage} / ${book.totalPages} · $pct%',
+                  style: GoogleFonts.outfit(fontSize: 11, color: c.textSub)),
+            ]),
           ),
-        ],
-      ),
+        ]),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: () => _resumeReading(context),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: c.brand,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14))),
+            child: Text('Continue Reading',
+                style: GoogleFonts.outfit(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -1092,62 +800,54 @@ class _ContinueReadingCard extends StatelessWidget {
 // ─── Reading Streak ───────────────────────────────────────────────────────────
 
 class _StreakSection extends StatelessWidget {
-  const _StreakSection({required this.cormorant, required this.outfit});
-  final TextStyle cormorant;
-  final TextStyle outfit;
+  const _StreakSection({required this.streakCount});
+  final int streakCount;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final streakLabel = streakCount == 0
+        ? 'Start reading!'
+        : '$streakCount day${streakCount == 1 ? '' : 's'} 🔥';
+    final badgeColor = streakCount == 0 ? c.surfaceAlt : c.brandSoft;
+    final badgeTextColor = streakCount == 0 ? c.textMuted : c.brand;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('Reading streak'),
+        const _SectionLabel('This week'),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
+              color: c.surface,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: cardShadow(context),
             ),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'This week',
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: const Color.fromARGB(173, 245, 240, 232),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.goldMuted,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '7 days',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          color: AppColors.gold,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: streakWeek.map((d) => _DayDot(day: d)).toList(),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: streakWeek.map((d) => _DayDot(day: d)).toList(),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    streakLabel,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: badgeTextColor,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1164,66 +864,46 @@ class _DayDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     Widget inner;
     Color bg;
     Border? border;
 
     switch (day.status) {
       case DayStatus.done:
-        bg = AppColors.gold;
+        bg = c.brand;
         border = null;
-        inner = const Icon(Icons.check, size: 14, color: AppColors.bg);
-        break;
+        inner = const Icon(Icons.check, size: 14, color: Colors.white);
       case DayStatus.today:
         bg = Colors.transparent;
-        border = Border.all(color: AppColors.gold, width: 2);
+        border = Border.all(color: c.brand, width: 2);
         inner = Container(
-          width: 6,
-          height: 6,
-          decoration: const BoxDecoration(
-            color: AppColors.gold,
-            shape: BoxShape.circle,
-          ),
-        );
-        break;
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: c.brand, shape: BoxShape.circle));
       case DayStatus.upcoming:
-        bg = const Color(0x0DFFFFFF);
+        bg = c.surfaceAlt;
         border = null;
         inner = Container(
-          width: 5,
-          height: 5,
-          decoration: const BoxDecoration(
-            color: Color(0x26FFFFFF),
-            shape: BoxShape.circle,
-          ),
-        );
-        break;
+            width: 5,
+            height: 5,
+            decoration:
+                BoxDecoration(color: c.textMuted, shape: BoxShape.circle));
     }
 
-    return Column(
-      children: [
-        Text(
-          day.label,
-          style: GoogleFonts.outfit(
-            fontSize: 10,
-            color: AppColors.textMuted,
-            letterSpacing: 0.05,
-          ),
-        ),
-        const SizedBox(height: 7),
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: bg,
-            shape: BoxShape.circle,
-            border: border,
-          ),
-          alignment: Alignment.center,
-          child: inner,
-        ),
-      ],
-    );
+    return Column(children: [
+      Text(day.label,
+          style: GoogleFonts.outfit(fontSize: 10, color: c.textMuted)),
+      const SizedBox(height: 6),
+      Container(
+        width: 32,
+        height: 32,
+        decoration:
+            BoxDecoration(color: bg, shape: BoxShape.circle, border: border),
+        alignment: Alignment.center,
+        child: inner,
+      ),
+    ]);
   }
 }
 
@@ -1233,103 +913,67 @@ class _WantToReadSection extends StatelessWidget {
   const _WantToReadSection({
     required this.books,
     required this.isLoading,
-    required this.cormorant,
-    required this.outfit,
   });
 
   final List<BookModel> books;
   final bool isLoading;
-  final TextStyle cormorant;
-  final TextStyle outfit;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+
     if (isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(color: AppColors.gold),
-        ),
-      );
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: CircularProgressIndicator(color: c.brand)));
     }
 
-    if (books.isEmpty) {
-      return const _SectionLabel('Want to read');
-    }
+    if (books.isEmpty) return const _SectionLabel('Want to read');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionLabel('Want to read'),
-        SizedBox(
-          height: 200,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(left: 22, right: 22, bottom: 4),
-            itemCount: books.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, i) {
-              final book = books[i];
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookDetailPage(book: book),
-                    ),
-                  );
-                },
-                child: SizedBox(
-                  width: 86,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: BookCover(
-                          url: book.coverUrl,
-                          width: 86,
-                          height: 120,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        book.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        book.author,
-                        style: GoogleFonts.outfit(
-                          fontSize: 10,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _SectionLabel('Want to read'),
+      SizedBox(
+        height: 200,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 4),
+          itemCount: books.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (context, i) {
+            final book = books[i];
+            return GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => BookDetailPage(book: book))),
+              child: SizedBox(
+                width: 86,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  BookCover(url: book.coverUrl, width: 86, height: 120),
+                  const SizedBox(height: 8),
+                  Text(book.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                          fontSize: 11, color: c.text, fontWeight: FontWeight.w500)),
+                  Text(book.author,
+                      style: GoogleFonts.outfit(fontSize: 10, color: c.textSub)),
+                ]),
+              ),
+            );
+          },
         ),
-      ],
-    );
+      ),
+    ]);
   }
 }
 
 // ─── Monthly Statistics ───────────────────────────────────────────────────────
-// ─── Data model for one week's stats ─────────────────────────────────────────
 
 class _WeekStats {
-  final String label; // W1, W2, W3, W4
-  final int pages; // pages read that week
-  final int sessions; // number of reading sessions
-  final int booksRead; // books completed that week
+  final String label;
+  final int pages;
+  final int sessions;
+  final int booksRead;
   final DateTime weekStart;
   final DateTime weekEnd;
 
@@ -1343,35 +987,28 @@ class _WeekStats {
   });
 }
 
-// ─── Monthly Stats Section ────────────────────────────────────────────────────
-
 class _MonthlyStatsSection extends StatefulWidget {
-  const _MonthlyStatsSection({required this.outfit});
-  final TextStyle outfit;
+  const _MonthlyStatsSection();
 
   @override
   State<_MonthlyStatsSection> createState() => _MonthlyStatsSectionState();
 }
 
 class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
-  // ── State ──────────────────────────────────────────────────────────────
   bool _loading = true;
   int _totalBooks = 0;
   int _totalPages = 0;
   int _streak = 0;
   int _avgPerDay = 0;
   List<_WeekStats> _weeks = [];
-  int _selectedWeek = -1; // -1 = none selected
+  int _selectedWeek = -1;
 
-  // Live Firestore subscriptions (auto-refresh like the weekly section)
   StreamSubscription? _librarySub;
   StreamSubscription? _sessionsSub;
 
-  // Latest snapshots, kept so we can recompute when either stream fires
   QuerySnapshot? _latestLibrarySnap;
   QuerySnapshot? _latestSessionSnap;
 
-  // Month bounds captured at subscribe-time (matches previous behavior)
   DateTime? _monthStart;
   DateTime? _monthEnd;
 
@@ -1388,31 +1025,26 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     super.dispose();
   }
 
-  // ── Build the 4 week buckets for the current month ──────────────────────
-
   List<_WeekStats> _buildWeekBuckets() {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, 1);
-    final end = DateTime(now.year, now.month + 1, 0); // last day of month
+    final end = DateTime(now.year, now.month + 1, 0);
 
     List<_WeekStats> weeks = [];
     int weekNum = 1;
     DateTime cursor = start;
 
     while (cursor.isBefore(end) || cursor.isAtSameMomentAs(end)) {
-      // Each bucket is 7 days, last bucket takes the rest
       final weekEnd = weekNum < 4 ? cursor.add(const Duration(days: 6)) : end;
 
-      weeks.add(
-        _WeekStats(
-          label: 'W$weekNum',
-          pages: 0,
-          sessions: 0,
-          booksRead: 0,
-          weekStart: cursor,
-          weekEnd: weekEnd,
-        ),
-      );
+      weeks.add(_WeekStats(
+        label: 'W$weekNum',
+        pages: 0,
+        sessions: 0,
+        booksRead: 0,
+        weekStart: cursor,
+        weekEnd: weekEnd,
+      ));
 
       cursor = weekEnd.add(const Duration(days: 1));
       weekNum++;
@@ -1421,10 +1053,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
 
     return weeks;
   }
-
-  // ── Subscribe to live Firestore data ────────────────────────────────────
-  // Mirrors the weekly section: snapshot listeners auto-refresh whenever
-  // the library or readingSessions collections change.
 
   void _listenToMonthlyStats() {
     final user = FirebaseAuth.instance.currentUser;
@@ -1437,8 +1065,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     _monthStart = DateTime(now.year, now.month, 1);
     _monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
 
-    // Library stream — drives totals, completed books, streak, and the
-    // fallback page-per-week computation when readingSessions is missing.
     _librarySub = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -1450,13 +1076,11 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
             _recompute();
           },
           onError: (e) {
-            debugPrint('❌ Monthly library stream error: $e');
+            debugPrint('Monthly library stream error: $e');
             if (mounted) setState(() => _loading = false);
           },
         );
 
-    // Reading sessions stream — optional collection; on error we just fall
-    // back to the library-based approximation.
     _sessionsSub = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -1478,8 +1102,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
           },
         );
   }
-
-  // ── Recompute all stats from the latest snapshots ───────────────────────
 
   void _recompute() {
     final librarySnap = _latestLibrarySnap;
@@ -1513,7 +1135,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
         }
       }
     } else {
-      // Fallback: use currentPage from library docs as total pages
       for (final doc in librarySnap.docs) {
         final data = doc.data() as Map<String, dynamic>;
         totalPages += (data['currentPage'] ?? 0) as int;
@@ -1535,7 +1156,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
       }
     }
 
-    // ── Count completed books this month ──
     final weekBooks = List<int>.filled(buckets.length, 0);
     for (final doc in librarySnap.docs) {
       final data = doc.data() as Map<String, dynamic>;
@@ -1557,7 +1177,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
       }
     }
 
-    // Calculate streak from library lastReadAt timestamps
     final Set<String> readDays = {};
     for (final doc in librarySnap.docs) {
       final data = doc.data() as Map<String, dynamic>;
@@ -1607,8 +1226,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     }
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────
-
   String _formatDate(DateTime d) => '${d.day}/${d.month}';
 
   double _maxPages() {
@@ -1617,8 +1234,6 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     return m == 0 ? 1 : m.toDouble();
   }
 
-  // ─── Build ──────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1626,51 +1241,43 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
       children: [
         const _SectionLabel('This month'),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Builder(builder: (context) {
+            final c = AppColors.of(context);
+            return Container(
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
+              color: c.surface,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: cardShadow(context),
             ),
             child: _loading
-                ? const Center(
+                ? Center(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: CircularProgressIndicator(color: AppColors.gold),
+                      padding: const EdgeInsets.all(20),
+                      child: CircularProgressIndicator(color: c.brand),
                     ),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Top stat row ──
                       Row(
                         children: [
                           _StatTile(value: '$_totalBooks', label: 'Books'),
-                          _vDivider(),
+                          _vDivider(c),
                           _StatTile(value: '$_totalPages', label: 'Pages'),
-                          _vDivider(),
+                          _vDivider(c),
                           _StatTile(value: '${_streak}d', label: 'Streak'),
-                          _vDivider(),
+                          _vDivider(c),
                           _StatTile(value: '$_avgPerDay p.', label: 'Avg/day'),
                         ],
                       ),
-
                       const SizedBox(height: 20),
-
                       Text(
                         'Pages per week',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: AppColors.textMuted,
-                          letterSpacing: 0.05,
-                        ),
+                        style: GoogleFonts.outfit(fontSize: 11, color: c.textMuted),
                       ),
-
                       const SizedBox(height: 12),
-
-                      // ── Bar chart ──
                       SizedBox(
                         height: 96,
                         child: Row(
@@ -1680,8 +1287,7 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
                             final w = _weeks[i];
                             final maxP = _maxPages();
                             final frac = w.pages / maxP;
-                            final isTop =
-                                w.pages == maxP.round() && w.pages > 0;
+                            final isTop = w.pages == maxP.round() && w.pages > 0;
                             final isSel = _selectedWeek == i;
 
                             return _Bar(
@@ -1696,45 +1302,40 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
                           }),
                         ),
                       ),
-
-                      // ── Week detail popup ──
-                      if (_selectedWeek >= 0 &&
-                          _selectedWeek < _weeks.length) ...[
+                      if (_selectedWeek >= 0 && _selectedWeek < _weeks.length) ...[
                         const SizedBox(height: 14),
-                        _buildWeekDetail(_weeks[_selectedWeek]),
+                        _buildWeekDetail(_weeks[_selectedWeek], c),
                       ],
                     ],
                   ),
-          ),
+          );
+          }),
         ),
       ],
     );
   }
 
-  Widget _vDivider() => Container(
+  Widget _vDivider(AppPalette c) => Container(
     width: 1,
     height: 32,
     margin: const EdgeInsets.symmetric(horizontal: 4),
-    color: AppColors.border,
+    color: c.border,
   );
 
-  // ── Expanded week detail card ────────────────────────────────────────────
-
-  Widget _buildWeekDetail(_WeekStats w) {
+  Widget _buildWeekDetail(_WeekStats w, AppPalette c) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.goldMuted,
+        color: c.brandSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.goldDim),
+        border: Border.all(color: c.brandMid),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1743,39 +1344,30 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.gold,
+                  color: c.brand,
                 ),
               ),
               GestureDetector(
                 onTap: () => setState(() => _selectedWeek = -1),
-                child: const Icon(
-                  Icons.close_rounded,
-                  size: 14,
-                  color: AppColors.gold,
-                ),
+                child: Icon(Icons.close_rounded, size: 14, color: c.brand),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          // Stats
           Row(
             children: [
-              _detailStat('${w.pages}', 'Pages read'),
+              _detailStat('${w.pages}', 'Pages read', c),
               const SizedBox(width: 16),
-              _detailStat('${w.sessions}', 'Sessions'),
+              _detailStat('${w.sessions}', 'Sessions', c),
               const SizedBox(width: 16),
-              _detailStat('${w.booksRead}', 'Books done'),
+              _detailStat('${w.booksRead}', 'Books done', c),
             ],
           ),
-          // Empty hint
           if (w.pages == 0) ...[
             const SizedBox(height: 8),
             Text(
               'No reading recorded this week.',
-              style: GoogleFonts.outfit(
-                fontSize: 11,
-                color: AppColors.textMuted,
-              ),
+              style: GoogleFonts.outfit(fontSize: 11, color: c.textSub),
             ),
           ],
         ],
@@ -1783,7 +1375,7 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
     );
   }
 
-  Widget _detailStat(String value, String label) {
+  Widget _detailStat(String value, String label, AppPalette c) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1792,12 +1384,12 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
           style: GoogleFonts.cormorantGaramond(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: AppColors.gold,
+            color: c.brand,
           ),
         ),
         Text(
           label,
-          style: GoogleFonts.outfit(fontSize: 10, color: AppColors.textMuted),
+          style: GoogleFonts.outfit(fontSize: 10, color: c.textSub),
         ),
       ],
     );
@@ -1813,6 +1405,7 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Expanded(
       child: Column(
         children: [
@@ -1820,15 +1413,15 @@ class _StatTile extends StatelessWidget {
             value,
             style: GoogleFonts.outfit(
               fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: AppColors.gold,
+              fontWeight: FontWeight.w600,
+              color: c.brand,
               height: 1,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: GoogleFonts.outfit(fontSize: 10, color: AppColors.textMuted),
+            style: GoogleFonts.outfit(fontSize: 10, color: c.textMuted),
           ),
         ],
       ),
@@ -1857,11 +1450,8 @@ class _Bar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final barColor = selected
-        ? AppColors.gold
-        : highlight
-        ? AppColors.gold
-        : AppColors.goldMuted;
+    final c = AppColors.of(context);
+    final barColor = (selected || highlight) ? c.brand : c.brandSoft;
 
     return Expanded(
       child: GestureDetector(
@@ -1871,18 +1461,14 @@ class _Bar extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Badge row
               SizedBox(
                 height: 18,
                 child: highlight
                     ? Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.gold,
+                            color: c.brand,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -1890,7 +1476,7 @@ class _Bar extends StatelessWidget {
                             style: GoogleFonts.outfit(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.bg,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -1898,7 +1484,6 @@ class _Bar extends StatelessWidget {
                     : const SizedBox.shrink(),
               ),
               const SizedBox(height: 6),
-              // Bar
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
@@ -1906,14 +1491,10 @@ class _Bar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: barColor,
                   borderRadius: BorderRadius.circular(6),
-                  border: highlight || selected
-                      ? null
-                      : Border.all(color: AppColors.goldDim),
-                  // Selected glow
                   boxShadow: selected
                       ? [
                           BoxShadow(
-                            color: AppColors.gold.withValues(alpha: 0.4),
+                            color: c.brand.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -1922,12 +1503,11 @@ class _Bar extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              // Label
               Text(
                 label,
                 style: GoogleFonts.outfit(
                   fontSize: 10,
-                  color: selected ? AppColors.gold : AppColors.textMuted,
+                  color: selected ? c.brand : c.textMuted,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -1945,55 +1525,31 @@ class _BottomNav extends StatelessWidget {
   const _BottomNav({
     required this.selectedIndex,
     required this.onTap,
-    required this.outfit,
-    required this.onAddTap,
   });
   final int selectedIndex;
   final ValueChanged<int> onTap;
-  final TextStyle outfit;
-  final VoidCallback onAddTap;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Container(
-      height: 80 + MediaQuery.of(context).padding.bottom,
+      height: 72 + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: AppColors.navBar,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, -2)),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavItem(
-            icon: Icons.home_rounded,
-            label: 'Home',
-            index: 0,
-            selected: selectedIndex,
-            onTap: onTap,
-          ),
-          _NavItem(
-            icon: Icons.menu_book_rounded,
-            label: 'Library',
-            index: 1,
-            selected: selectedIndex,
-            onTap: onTap,
-          ),
-          _NavFab(onTap: onAddTap),
-          _NavItem(
-            icon: Icons.chat_rounded,
-            label: 'Ask AI',
-            index: 2,
-            selected: selectedIndex,
-            onTap: onTap,
-          ),
-          _NavItem(
-            icon: Icons.settings_rounded,
-            label: 'Settings',
-            index: 3,
-            selected: selectedIndex,
-            onTap: onTap,
-          ),
+          _NavItem(icon: Icons.home_rounded,         label: 'Home',     index: 0, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.explore_rounded,      label: 'Discover', index: 1, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.library_books_rounded,label: 'Library',  index: 2, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.auto_awesome_rounded, label: 'Ask AI',   index: 3, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.person_rounded,       label: 'Profile',  index: 4, selected: selectedIndex, onTap: onTap),
         ],
       ),
     );
@@ -2018,24 +1574,22 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final color = isActive ? c.brand : c.textMuted;
     return GestureDetector(
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 22,
-            color: isActive ? AppColors.gold : AppColors.textMuted,
-          ),
+          Icon(icon, size: 22, color: color),
           const SizedBox(height: 4),
           Text(
             label,
             style: GoogleFonts.outfit(
               fontSize: 9,
               letterSpacing: 0.05,
-              color: isActive ? AppColors.gold : AppColors.textMuted,
+              color: color,
             ),
           ),
           if (isActive) ...[
@@ -2043,10 +1597,7 @@ class _NavItem extends StatelessWidget {
             Container(
               width: 4,
               height: 4,
-              decoration: const BoxDecoration(
-                color: AppColors.gold,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: c.brand, shape: BoxShape.circle),
             ),
           ],
         ],
@@ -2055,33 +1606,3 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _NavFab extends StatelessWidget {
-  const _NavFab({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Transform.translate(
-        offset: const Offset(0, -8),
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: AppColors.gold,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.gold.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.add, color: AppColors.bg, size: 26),
-        ),
-      ),
-    );
-  }
-}

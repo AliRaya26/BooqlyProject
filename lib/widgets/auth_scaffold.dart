@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:booqly/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Shared auth screen shell: tablet-friendly width, keyboard insets, tap-to-dismiss.
@@ -15,7 +16,7 @@ class AuthScaffold extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
-  static const bg = Color(0xFF0E0C0A);
+  static const bg = AppColors.bg;
 
   // Reserve enough vertical space for the inner header padding (24 top + 24
   // bottom). Any value above 0 is fine; this just lets the scroll view fill
@@ -69,7 +70,7 @@ class AuthScaffold extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: IconButton(
                               icon: const Icon(Icons.arrow_back_rounded),
-                              color: const Color(0xFFD4A96A),
+                              color: AppColors.brand,
                               onPressed: onBack ?? () => Navigator.maybePop(context),
                             ),
                           ),
@@ -100,8 +101,7 @@ class AuthPrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
 
-  static const _gold = Color(0xFFD4A96A);
-  static const _bg = Color(0xFF0E0C0A);
+  static const _gold = AppColors.brand;
 
   @override
   Widget build(BuildContext context) {
@@ -120,14 +120,14 @@ class AuthPrimaryButton extends StatelessWidget {
             ? const SizedBox(
                 height: 22,
                 width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: _bg),
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
             : Text(
                 label,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: _bg,
+                  color: Colors.white,
                 ),
               ),
       ),

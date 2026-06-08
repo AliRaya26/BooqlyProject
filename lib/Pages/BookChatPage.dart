@@ -1,14 +1,14 @@
 import 'dart:typed_data';
 
-import 'package:booqly/Pages/HomePage.dart';
 import 'package:booqly/models/chat_message.dart';
+import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/services/book_lookup_service.dart';
 import 'package:booqly/services/gemini_chat_service.dart';
+import 'package:booqly/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
-/// Bottom nav height in [HomePage] — keeps input bar visible above it.
 const double _kBottomNavClearance = 88;
 
 class BookChatPage extends StatefulWidget {
@@ -92,7 +92,6 @@ class _BookChatPageState extends State<BookChatPage> {
 
   String _welcomeMessage(BookChatContext context) {
     final catalogCount = context.catalogBooks.length;
-
     return 'Hi! I\'m here to help you choose what to read and share feedback on books.\n\n'
         '• Ask what to read next\n'
         '• Ask for thoughts on any book by name\n'
@@ -201,7 +200,7 @@ class _BookChatPageState extends State<BookChatPage> {
 
   String _friendlyError(Object e) {
     if (e is GeminiApiException) return e.message;
-    return 'Sorry, I couldn\'t reply. Please try again.\n\n$e';
+    return 'Sorry, I couldn\'t reply. Please try again.';
   }
 
   String? _buildLookupHint(String message) {
@@ -242,17 +241,21 @@ class _BookChatPageState extends State<BookChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: _bottomInset),
-      child: Column(
-        children: [
-          _ChatHeader(
-            topPadding: MediaQuery.of(context).padding.top,
-            onRefresh: _loadingContext || _sending ? null : _refreshContext,
-          ),
-          Expanded(child: _buildBody()),
-          if (_initError == null && !_loadingContext) _buildInputBar(),
-        ],
+    final c = AppColors.of(context);
+    return Container(
+      color: c.bg,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: _bottomInset),
+        child: Column(
+          children: [
+            _ChatHeader(
+              topPadding: MediaQuery.of(context).padding.top,
+              onRefresh: _loadingContext || _sending ? null : _refreshContext,
+            ),
+            Expanded(child: _buildBody(c)),
+            if (_initError == null && !_loadingContext) _buildInputBar(c),
+          ],
+        ),
       ),
     );
   }
@@ -268,10 +271,10 @@ class _BookChatPageState extends State<BookChatPage> {
     await _initializeChat();
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(AppPalette c) {
     if (_loadingContext) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.gold),
+      return Center(
+        child: CircularProgressIndicator(color: c.brand),
       );
     }
 
@@ -291,7 +294,7 @@ class _BookChatPageState extends State<BookChatPage> {
       children: [
         if (_messages.length <= 1)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -301,11 +304,11 @@ class _BookChatPageState extends State<BookChatPage> {
                     s,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: c.brand,
                     ),
                   ),
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border),
+                  backgroundColor: c.brandSoft,
+                  side: BorderSide(color: c.brandMid),
                   onPressed: _sending ? null : () => _sendMessage(s),
                 );
               }).toList(),
@@ -328,12 +331,12 @@ class _BookChatPageState extends State<BookChatPage> {
     );
   }
 
-  Widget _buildInputBar() {
+  Widget _buildInputBar(AppPalette c) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: const BoxDecoration(
-        color: AppColors.navBar,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -359,7 +362,7 @@ class _BookChatPageState extends State<BookChatPage> {
                       'Book photo — add a question or tap send',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: AppColors.textMuted,
+                        color: c.textSub,
                       ),
                     ),
                   ),
@@ -368,7 +371,7 @@ class _BookChatPageState extends State<BookChatPage> {
                       _pendingImageBytes = null;
                       _pendingImageMime = null;
                     }),
-                    icon: const Icon(Icons.close, color: AppColors.textMuted),
+                    icon: Icon(Icons.close, color: c.textMuted),
                   ),
                 ],
               ),
@@ -378,7 +381,10 @@ class _BookChatPageState extends State<BookChatPage> {
             children: [
               IconButton(
                 onPressed: _sending ? null : _pickImage,
-                icon: const Icon(Icons.photo_camera_outlined, color: AppColors.gold),
+                icon: Icon(
+                  Icons.photo_camera_outlined,
+                  color: c.brand,
+                ),
                 tooltip: 'Photo of a book',
               ),
               Expanded(
@@ -389,31 +395,31 @@ class _BookChatPageState extends State<BookChatPage> {
                   minLines: 1,
                   style: GoogleFonts.outfit(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: c.text,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Ask what to read or about a book…',
                     hintStyle: GoogleFonts.outfit(
                       fontSize: 14,
-                      color: AppColors.textMuted,
+                      color: c.textMuted,
                     ),
                     filled: true,
-                    fillColor: AppColors.surface,
+                    fillColor: c.surfaceAlt,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: c.border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: c.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.goldDim),
+                      borderSide: BorderSide(color: c.brand),
                     ),
                   ),
                   textInputAction: TextInputAction.send,
@@ -422,7 +428,7 @@ class _BookChatPageState extends State<BookChatPage> {
               ),
               const SizedBox(width: 6),
               Material(
-                color: AppColors.gold,
+                color: c.brand,
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
                   onTap: _sending ? null : () => _sendMessage(),
@@ -435,10 +441,10 @@ class _BookChatPageState extends State<BookChatPage> {
                             padding: EdgeInsets.all(12),
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.bg,
+                              color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.send_rounded, color: AppColors.bg),
+                        : const Icon(Icons.send_rounded, color: Colors.white),
                   ),
                 ),
               ),
@@ -450,6 +456,8 @@ class _BookChatPageState extends State<BookChatPage> {
   }
 }
 
+// ── Header ────────────────────────────────────────────────────────────────────
+
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({required this.topPadding, this.onRefresh});
 
@@ -458,10 +466,12 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Container(
-      padding: EdgeInsets.fromLTRB(22, topPadding + 12, 22, 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(bottom: BorderSide(color: c.border)),
       ),
       child: Row(
         children: [
@@ -469,12 +479,12 @@ class _ChatHeader extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.goldMuted,
+              color: c.brandSoft,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.auto_stories_rounded,
-              color: AppColors.gold,
+              color: c.brand,
               size: 22,
             ),
           ),
@@ -486,16 +496,16 @@ class _ChatHeader extends StatelessWidget {
                 Text(
                   'Reading assistant',
                   style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: c.text,
                   ),
                 ),
                 Text(
                   'What to read · book feedback · photo',
                   style: GoogleFonts.outfit(
                     fontSize: 11,
-                    color: AppColors.textMuted,
+                    color: c.textSub,
                   ),
                 ),
               ],
@@ -504,7 +514,7 @@ class _ChatHeader extends StatelessWidget {
           if (onRefresh != null)
             IconButton(
               onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded, color: AppColors.gold),
+              icon: Icon(Icons.refresh_rounded, color: c.brand),
               tooltip: 'Refresh',
             ),
         ],
@@ -513,6 +523,8 @@ class _ChatHeader extends StatelessWidget {
   }
 }
 
+// ── Message bubble ────────────────────────────────────────────────────────────
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.message});
 
@@ -520,6 +532,7 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     final isUser = message.role == ChatRole.user;
 
     return Align(
@@ -532,10 +545,10 @@ class _MessageBubble extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isUser
-              ? AppColors.gold
+              ? c.brand
               : message.isError
-                  ? const Color(0xFF2A1515)
-                  : AppColors.surface,
+                  ? c.red.withValues(alpha: 0.12)
+                  : c.surfaceAlt,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -546,8 +559,8 @@ class _MessageBubble extends StatelessWidget {
               ? null
               : Border.all(
                   color: message.isError
-                      ? Colors.red.withValues(alpha: 0.3)
-                      : AppColors.border,
+                      ? c.red.withValues(alpha: 0.3)
+                      : c.border,
                 ),
         ),
         child: Column(
@@ -571,7 +584,7 @@ class _MessageBubble extends StatelessWidget {
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 height: 1.45,
-                color: isUser ? AppColors.bg : AppColors.textPrimary,
+                color: isUser ? Colors.white : c.text,
               ),
             ),
           ],
@@ -581,20 +594,23 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+// ── Typing indicator ──────────────────────────────────────────────────────────
+
 class _TypingIndicator extends StatelessWidget {
   const _TypingIndicator();
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: c.surfaceAlt,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: c.border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -604,7 +620,7 @@ class _TypingIndicator extends StatelessWidget {
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: AppColors.gold.withValues(alpha: 0.8),
+                color: c.brand.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(width: 10),
@@ -612,7 +628,7 @@ class _TypingIndicator extends StatelessWidget {
               'Thinking…',
               style: GoogleFonts.outfit(
                 fontSize: 13,
-                color: AppColors.textMuted,
+                color: c.textSub,
               ),
             ),
           ],
@@ -622,36 +638,71 @@ class _TypingIndicator extends StatelessWidget {
   }
 }
 
+// ── Empty / error states ──────────────────────────────────────────────────────
+
 class _MissingApiKeyState extends StatelessWidget {
   const _MissingApiKeyState();
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.key_rounded, size: 48, color: AppColors.gold.withValues(alpha: 0.8)),
-          const SizedBox(height: 16),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: c.brandSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.key_rounded, color: c.brand, size: 34),
+          ),
+          const SizedBox(height: 20),
           Text(
-            'Gemini API key required',
+            'Enable AI Chat first',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: c.text,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Go to Settings → AI Chat and paste your free Gemini key to unlock the reading assistant.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              height: 1.55,
+              color: c.textSub,
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
+            icon: const Icon(Icons.settings_rounded, size: 18),
+            label: Text('Open Settings',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            style: FilledButton.styleFrom(
+              backgroundColor: c.brand,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'Add GEMINI_API_KEY in assets/config.env, then restart the app.',
+            'Free key → aistudio.google.com/app/apikey',
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              height: 1.5,
-              color: AppColors.textMuted,
-            ),
+            style:
+                GoogleFonts.outfit(fontSize: 11, color: c.textMuted),
           ),
         ],
       ),
@@ -664,32 +715,65 @@ class _InvalidApiKeyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.key_off_rounded, size: 48, color: Colors.redAccent),
-          const SizedBox(height: 16),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: c.red.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.key_off_rounded, size: 34, color: c.red),
+          ),
+          const SizedBox(height: 20),
           Text(
             'API key not valid',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: c.text,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Your Gemini key is expired or invalid. '
+            'Create a new one and update it in Settings → AI Chat.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              height: 1.55,
+              color: c.textSub,
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
+            icon: const Icon(Icons.settings_rounded, size: 18),
+            label: Text('Update Key',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            style: FilledButton.styleFrom(
+              backgroundColor: c.brand,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'Create a new key at aistudio.google.com/apikey, '
-            'update assets/config.env, and restart the app.',
+            'Free key → aistudio.google.com/app/apikey',
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              height: 1.5,
-              color: AppColors.textMuted,
-            ),
+            style:
+                GoogleFonts.outfit(fontSize: 11, color: c.textMuted),
           ),
         ],
       ),
@@ -705,32 +789,34 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 40),
+          Icon(Icons.error_outline_rounded, color: c.red, size: 40),
           const SizedBox(height: 12),
           Text(
             'Could not start the assistant',
             style: GoogleFonts.outfit(
               fontSize: 16,
-              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              color: c.text,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textMuted),
+            style: GoogleFonts.outfit(fontSize: 12, color: c.textSub),
           ),
           const SizedBox(height: 20),
           TextButton(
             onPressed: onRetry,
             child: Text(
               'Try again',
-              style: GoogleFonts.outfit(color: AppColors.gold),
+              style: GoogleFonts.outfit(color: c.brand),
             ),
           ),
         ],

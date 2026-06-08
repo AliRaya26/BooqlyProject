@@ -5,8 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_service.dart';
 import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
+import 'package:booqly/services/gemini_chat_service.dart';
 import 'firebase_options.dart';
 
 final ReadingMotivationService motivationService = ReadingMotivationService();
@@ -39,6 +42,12 @@ void main() async {
     GoogleFonts.cormorantGaramond(),
     GoogleFonts.merriweather(),
   ]);
+
+  // Restore any API key the user saved in-app (must be before runApp).
+  await GeminiChatService.loadSavedApiKey();
+
+  // Restore persisted theme mode.
+  await ThemeService.instance.load();
 
   await motivationService.initialize();
   bindMotivationService(motivationService);
@@ -81,14 +90,55 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
+  static ThemeData _lightTheme() => ThemeData.light().copyWith(
+        scaffoldBackgroundColor: AppColors.bg,
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.brand,
+          surface: AppColors.surface,
+        ),
+        cardColor: AppColors.surface,
+        dividerColor: AppColors.border,
+        dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: AppColors.surface,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.bg,
+          elevation: 0,
+        ),
+      );
+
+  static ThemeData _darkTheme() => ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF111110),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF6366F1),
+          surface: Color(0xFF1C1B19),
+        ),
+        cardColor: const Color(0xFF1C1B19),
+        dividerColor: const Color(0xFF2A2825),
+        dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1C1B19)),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Color(0xFF1C1B19),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF111110),
+          elevation: 0,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0E0C0A),
-      ),
-      home: const AuthGate(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.instance.notifier,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: _lightTheme(),
+          darkTheme: _darkTheme(),
+          themeMode: themeMode,
+          home: const AuthGate(),
+        );
+      },
     );
   }
 }

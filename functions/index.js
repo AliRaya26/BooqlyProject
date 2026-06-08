@@ -202,17 +202,40 @@ exports.sendPasswordResetEmail = onCall(
   },
 );
 
+// ─── Nudge content ────────────────────────────────────────────────────────────
+
 const NUDGE_MESSAGES = [
-  "You have free time — open a book instead of scrolling.",
-  "Your calendar just cleared. Perfect moment for a few pages.",
-  "Skip the feed. Your current read is waiting.",
-  "Free block ahead — trade screen time for story time.",
-  "Small reading session now beats endless scrolling later.",
+  "Your calendar just cleared — your book has been patiently waiting.",
+  "No meetings, no pings, no obligations. Just you and a good read right now.",
+  "This gap in your day is a gift. Spend it with your book, not your feed.",
+  "You have free time. Open Booqly before the notifications pull you back.",
+  "A quiet pocket in your day — the best chapters get read exactly like this.",
+  "Instead of scrolling, how about a chapter? Your future self will be grateful.",
+  "Your calendar opened up. A few pages before it fills back in?",
+  "Trade the feed for your book. You always feel better after reading.",
+  "Free time detected. Your reading streak is waiting to grow.",
+  "Right now there's nothing you have to do. That's rare — use it wisely.",
+  "The scroll can wait. Your book cannot (it's been 23 hours).",
+  "A calm moment, just for you. The story is right where you left it.",
 ];
+
+const NUDGE_TITLES_BY_MINUTES = {
+  30: "30 minutes free — time for a chapter 📖",
+  45: "45 quiet minutes ahead 📖",
+  60: "An hour to yourself — open a book 📖",
+};
+
+function nudgeTitle(minutes) {
+  if (minutes >= 90) return `${Math.round(minutes / 60 * 2) / 2}h free — your book is waiting 📖`;
+  if (minutes >= 60) return "An hour to yourself — open a book 📖";
+  if (minutes >= 45) return "45 quiet minutes ahead 📖";
+  return `${minutes} minutes free — time for a chapter 📖`;
+}
 
 const DAY_START_HOUR = 8;
 const DAY_END_HOUR = 24;
-const NUDGE_INTERVAL_MS = 14 * 60 * 1000;
+const MIN_SLOT_MINUTES = 30;   // minimum free slot: 30 minutes
+const MAX_SLOT_MINUTES = 1440; // maximum free slot: 24 hours
 
 function dayKeyInTimeZone(date, timeZone) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -248,22 +271,88 @@ function buildNudgeEmailHtml({ firstName, message, timeLabel, slotMinutes }) {
     slotMinutes >= 60
       ? `~${(slotMinutes / 60).toFixed(slotMinutes % 60 === 0 ? 0 : 1)} hours`
       : `${slotMinutes} minutes`;
+  const safeMessage = escapeHtml(message);
+  const safeTime = escapeHtml(timeLabel);
 
-  return `
-<!DOCTYPE html>
-<html>
-<body style="font-family:Georgia,serif;background:#0E0C0A;color:#F5F0E8;padding:32px;margin:0;">
-  <div style="max-width:520px;margin:0 auto;">
-    <p style="font-size:40px;margin:0 0 8px;">📖</p>
-    <h1 style="color:#D4A96A;font-style:italic;margin:0 0 12px;font-weight:600;">A quiet moment, ${greeting}</h1>
-    <p style="font-size:17px;line-height:1.6;margin:0 0 16px;">${escapeHtml(message)}</p>
-    <div style="background:#1A1713;border:1px solid #2A2520;border-radius:16px;padding:18px 22px;margin:24px 0;">
-      <p style="margin:0;color:#888580;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;">Free block</p>
-      <p style="margin:6px 0 0;font-size:20px;font-weight:bold;color:#F5F0E8;">${escapeHtml(timeLabel)} · ${slotLabel}</p>
-    </div>
-    <p style="font-size:15px;line-height:1.6;color:#888580;margin:24px 0 0;">A few pages now beats endlessly scrolling later. Booqly is right where you left off.</p>
-    <p style="color:#5a5853;margin-top:32px;font-size:12px;">You're getting this because Free-time nudges are enabled in Booqly settings. Turn them off any time from Settings → Free-time nudges.</p>
-  </div>
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Time to read — Booqly</title>
+</head>
+<body style="margin:0;padding:0;background:#0E0C0A;font-family:Georgia,'Times New Roman',serif;color:#F5F0E8;-webkit-font-smoothing:antialiased;">
+  <!-- preview text -->
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#0E0C0A;">${safeMessage} — ${slotLabel} just opened up in your day.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0C0A;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:540px;width:100%;background:#1A1713;border:1px solid #2A2520;border-radius:24px;overflow:hidden;">
+        <!-- gold bar -->
+        <tr><td bgcolor="#D4A96A" height="5" style="height:5px;line-height:5px;font-size:0;">&nbsp;</td></tr>
+        <!-- book emoji -->
+        <tr><td align="center" style="padding:40px 32px 0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr><td align="center" width="80" height="80" style="width:80px;height:80px;background:#2C200F;border-radius:40px;font-size:40px;line-height:80px;text-align:center;">
+              &#128214;
+            </td></tr>
+          </table>
+        </td></tr>
+        <!-- headline -->
+        <tr><td align="center" style="padding:16px 32px 0;">
+          <h1 style="margin:0;font-family:Georgia,serif;font-style:italic;font-size:32px;font-weight:700;color:#D4A96A;letter-spacing:0.3px;line-height:1.15;">
+            A quiet moment, ${greeting}
+          </h1>
+        </td></tr>
+        <!-- message -->
+        <tr><td style="padding:16px 36px 0;">
+          <p style="margin:0;font-size:17px;line-height:1.7;color:#E0D8CC;text-align:center;">
+            ${safeMessage}
+          </p>
+        </td></tr>
+        <!-- free-block card -->
+        <tr><td style="padding:24px 36px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="background:#0E0C0A;border:1px solid #2A2520;border-radius:16px;padding:20px 24px;">
+            <tr><td>
+              <p style="margin:0;color:#888580;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Your free block</p>
+              <p style="margin:8px 0 0;font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#F5F0E8;line-height:1.2;">
+                ${safeTime}&nbsp;&nbsp;·&nbsp;&nbsp;${slotLabel}
+              </p>
+              <p style="margin:10px 0 0;font-size:14px;color:#888580;line-height:1.5;">
+                That's enough time for a solid chapter. More than enough to remember why you love reading.
+              </p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <!-- quote -->
+        <tr><td style="padding:24px 36px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="padding:0 0 0 16px;border-left:3px solid #D4A96A;">
+              <p style="margin:0;font-family:Georgia,serif;font-style:italic;color:#C8BFB4;font-size:15px;line-height:1.65;">
+                &ldquo;Not all those who wander are lost — but readers always know exactly where they are.&rdquo;
+              </p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <!-- divider -->
+        <tr><td style="padding:28px 36px 0;">
+          <div style="height:1px;background:#2A2520;">&nbsp;</div>
+        </td></tr>
+        <!-- footer -->
+        <tr><td align="center" style="padding:18px 36px 32px;">
+          <p style="margin:0;color:#888580;font-size:13px;line-height:1.7;">
+            Happy reading,<br/>
+            <span style="color:#D4A96A;font-style:italic;font-family:Georgia,serif;">— The Booqly team</span>
+          </p>
+          <p style="margin:14px 0 0;color:#4a4844;font-size:11px;line-height:1.5;">
+            You're getting this because free-time nudges are on in Booqly.<br/>
+            Turn them off anytime: Profile → Settings → Free-time nudges.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
 }
@@ -273,13 +362,23 @@ function findActiveSlot(nowMs, slots) {
     const startMs = Date.parse(slot.start);
     const endMs = Date.parse(slot.end);
     if (Number.isNaN(startMs) || Number.isNaN(endMs)) continue;
-    if (nowMs >= startMs && nowMs < endMs) {
-      return {
-        startMs,
-        endMs,
-        durationMinutes: Math.max(1, Math.round((endMs - startMs) / 60000)),
-      };
-    }
+    if (nowMs < startMs || nowMs >= endMs) continue;
+
+    const totalMinutes = Math.round((endMs - startMs) / 60000);
+    const remainingMinutes = Math.round((endMs - nowMs) / 60000);
+
+    // Only qualify slots between 30 min and 24 hours total duration
+    if (totalMinutes < MIN_SLOT_MINUTES) continue;
+    if (totalMinutes > MAX_SLOT_MINUTES) continue;
+    if (remainingMinutes < MIN_SLOT_MINUTES) continue;
+
+    return {
+      startMs,
+      endMs,
+      startIso: slot.start,
+      durationMinutes: totalMinutes,
+      remainingMinutes,
+    };
   }
   return null;
 }
@@ -367,18 +466,19 @@ exports.sendReadingNudges = onSchedule(
         continue;
       }
 
-      const lastNudgeAt = data.lastNudgeAt?.toDate?.();
-      if (lastNudgeAt && nowMs - lastNudgeAt.getTime() < NUDGE_INTERVAL_MS) {
+      // Send only ONCE per slot — skip if this slot's start was already nudged
+      const lastNudgedSlotStart =
+        typeof data.lastNudgedSlotStart === "string"
+          ? data.lastNudgedSlotStart
+          : "";
+      if (lastNudgedSlotStart === activeSlot.startIso) {
         skipped++;
         continue;
       }
 
       const message =
         NUDGE_MESSAGES[Math.floor(Math.random() * NUDGE_MESSAGES.length)];
-      const title =
-        activeSlot.durationMinutes >= 60
-          ? `About ${activeSlot.durationMinutes} minutes free`
-          : `${activeSlot.durationMinutes} min of free time`;
+      const title = nudgeTitle(activeSlot.remainingMinutes);
       const timeLabel = formatTimeLabel(new Date(activeSlot.startMs), timeZone);
       const email =
         typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
@@ -387,7 +487,9 @@ exports.sendReadingNudges = onSchedule(
       const fcmToken =
         typeof data.fcmToken === "string" ? data.fcmToken.trim() : "";
 
+      // Mark this slot as notified immediately to prevent duplicates
       const updates = {
+        lastNudgedSlotStart: activeSlot.startIso,
         lastNudgeAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -403,15 +505,19 @@ exports.sendReadingNudges = onSchedule(
       }
 
       if (email && emailPattern.test(email)) {
+        const emailSubject =
+          activeSlot.remainingMinutes >= 60
+            ? `An hour to yourself, ${firstName || "Reader"} — open a book 📖`
+            : `${activeSlot.remainingMinutes} minutes free — your book is waiting 📖`;
         try {
           await deliverViaGmail({
             to: email,
-            subject: `${activeSlot.durationMinutes} min of free time — open a book instead`,
+            subject: emailSubject,
             html: buildNudgeEmailHtml({
               firstName,
               message,
               timeLabel,
-              slotMinutes: activeSlot.durationMinutes,
+              slotMinutes: activeSlot.remainingMinutes,
             }),
           });
         } catch (err) {

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:booqly/Pages/HomePage.dart';
+import 'package:booqly/theme/app_colors.dart';
 import 'package:booqly/services/calendar_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -81,7 +81,7 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
       backgroundColor: AppColors.surface,
       title: Text(
         'Link Google Calendar',
-        style: GoogleFonts.outfit(color: AppColors.textPrimary),
+        style: GoogleFonts.outfit(color: AppColors.text),
       ),
       content: SizedBox(
         width: 320,
@@ -112,7 +112,7 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
                 _status!,
                 style: GoogleFonts.outfit(
                   fontSize: 12,
-                  color: AppColors.gold,
+                  color: AppColors.brand,
                 ),
               ),
             ],
@@ -125,7 +125,7 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.gold,
+                      color: AppColors.brand,
                     ),
                   ),
                 ),

@@ -2,16 +2,11 @@ import 'package:booqly/Pages/SignupPage.dart';
 import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:booqly/theme/app_colors.dart';
 import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/widgets/auth_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-const _bg = Color(0xFF0E0C0A);
-const _gold = Color(0xFFD4A96A);
-const _ink = Color(0xFFF5F0E8);
-const _muted = Color(0xFF888580);
-const _surf = Color(0xFF1A1713);
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -59,8 +54,8 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = false);
 
     _showMessage(
-          error ??
-              'Reset email sent to $email. Check inbox and spam (may come from Firebase).',
+      error ??
+          'Reset email sent to $email. Check inbox and spam (may come from Firebase).',
     );
   }
 
@@ -118,12 +113,21 @@ class _LoginPageState extends State<LoginPage> {
   InputDecoration _fieldDecoration(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: _muted),
+      hintStyle: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 15),
+      prefixIcon: Icon(icon, color: AppColors.textMuted, size: 20),
       filled: true,
-      fillColor: _surf,
+      fillColor: AppColors.surfaceAlt,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.brand, width: 1.5),
       ),
     );
   }
@@ -142,20 +146,19 @@ class _LoginPageState extends State<LoginPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Login',
-            style: GoogleFonts.cormorantGaramond(
-              fontSize: 56,
-              fontWeight: FontWeight.w600,
-              color: _gold,
+            'Welcome back',
+            style: GoogleFonts.outfit(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: AppColors.text,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             'Sign in to continue your reading journey.',
             style: GoogleFonts.outfit(
-              fontSize: 17,
-              color: _muted,
-              fontStyle: FontStyle.italic,
+              fontSize: 15,
+              color: AppColors.textSub,
             ),
           ),
           const SizedBox(height: 32),
@@ -166,10 +169,10 @@ class _LoginPageState extends State<LoginPage> {
             textInputAction: TextInputAction.next,
             autocorrect: false,
             autofillHints: const [AutofillHints.email],
-            style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+            style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
             decoration: _fieldDecoration('Email address', Icons.mail_outline_rounded),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           TextField(
             controller: _passwordController,
             enabled: !_isLoading,
@@ -177,21 +180,25 @@ class _LoginPageState extends State<LoginPage> {
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.password],
             onSubmitted: (_) => _signIn(),
-            style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+            style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
             decoration: _fieldDecoration('Password', Icons.lock_outline_rounded),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: _isLoading ? null : _handleForgotPassword,
               child: Text(
                 'Forgot password?',
-                style: GoogleFonts.outfit(fontSize: 14, color: _gold),
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.brand,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           AuthPrimaryButton(
             label: 'Sign in',
             isLoading: _isLoading,
@@ -203,15 +210,15 @@ class _LoginPageState extends State<LoginPage> {
             height: 52,
             child: OutlinedButton.icon(
               onPressed: _isLoading ? null : _signInWithGoogle,
-              icon: const Icon(Icons.g_mobiledata, color: _gold, size: 28),
+              icon: const Icon(Icons.g_mobiledata, color: AppColors.brand, size: 28),
               label: Text(
                 'Continue with Google',
-                style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+                style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: _gold),
+                side: const BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
@@ -219,12 +226,15 @@ class _LoginPageState extends State<LoginPage> {
           const SizedBox(height: 24),
           Row(
             children: [
-              const Expanded(child: Divider(color: Color(0xFF2A2520))),
+              const Expanded(child: Divider(color: AppColors.border)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('or', style: GoogleFonts.outfit(color: _muted)),
+                child: Text(
+                  'or',
+                  style: GoogleFonts.outfit(color: AppColors.textMuted),
+                ),
               ),
-              const Expanded(child: Divider(color: Color(0xFF2A2520))),
+              const Expanded(child: Divider(color: AppColors.border)),
             ],
           ),
           const SizedBox(height: 16),
@@ -240,13 +250,13 @@ class _LoginPageState extends State<LoginPage> {
                     },
               child: Text.rich(
                 TextSpan(
-                  style: GoogleFonts.outfit(color: _muted, fontSize: 15),
+                  style: GoogleFonts.outfit(color: AppColors.textSub, fontSize: 15),
                   children: [
                     const TextSpan(text: "Don't have an account? "),
                     TextSpan(
                       text: 'Sign up',
                       style: GoogleFonts.outfit(
-                        color: _gold,
+                        color: AppColors.brand,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -290,10 +300,15 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: _surf,
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(
         'Reset password',
-        style: GoogleFonts.cormorantGaramond(color: _gold, fontSize: 28),
+        style: GoogleFonts.outfit(
+          color: AppColors.text,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -301,7 +316,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
         children: [
           Text(
             'Enter your account email. We will send a link to reset your password.',
-            style: GoogleFonts.outfit(color: _muted, fontSize: 14),
+            style: GoogleFonts.outfit(color: AppColors.textSub, fontSize: 14),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -311,15 +326,23 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
             autofocus: true,
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _submit(),
-            style: GoogleFonts.outfit(color: _ink),
+            style: GoogleFonts.outfit(color: AppColors.text),
             decoration: InputDecoration(
               hintText: 'Email address',
-              hintStyle: GoogleFonts.outfit(color: _muted),
+              hintStyle: GoogleFonts.outfit(color: AppColors.textMuted),
               filled: true,
-              fillColor: _bg,
+              fillColor: AppColors.surfaceAlt,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.brand),
               ),
             ),
           ),
@@ -328,11 +351,17 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: GoogleFonts.outfit(color: _muted)),
+          child: Text('Cancel', style: GoogleFonts.outfit(color: AppColors.textSub)),
         ),
         TextButton(
           onPressed: _submit,
-          child: Text('Send link', style: GoogleFonts.outfit(color: _gold)),
+          child: Text(
+            'Send link',
+            style: GoogleFonts.outfit(
+              color: AppColors.brand,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );

@@ -1,197 +1,77 @@
 import 'dart:io';
 
 import 'package:booqly/Pages/BookDetailPage.dart';
+import 'package:booqly/theme/app_colors.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 
-class AppColors {
-  static const bg = Color(0xFF0E0C0A);
-  static const surface = Color(0xFF1A1713);
-  static const navBar = Color(0xFF141210);
-  static const gold = Color(0xFFD4A96A);
-  static const goldMuted = Color(0x1FD4A96A);
-  static const goldDim = Color(0x4DD4A96A);
-  static const textPrimary = Color(0xFFF5F0E8);
-  static const textSecondary = Color(0x80FFFFFF);
-  static const textMuted = Color(0x4DFFFFFF);
-  static const border = Color(0x0FFFFFFF);
-  static const borderDash = Color(0x4DD4A96A);
-  static const dayDone = gold;
-  static const chipBorder = Color(0x1FFFFFFF);
-
-  // Book cover accents
-  static const coverAmber = Color(0xFF2C1F0E);
-  static const coverBlue = Color(0xFF151C24);
-  static const coverPurple = Color(0xFF1A1424);
-  static const coverGreen = Color(0xFF0F1F18);
-
-  static const spineAmber = Color(0xFFD4A96A);
-  static const spineBlue = Color(0xFF5B8DD9);
-  static const spinePurple = Color(0xFF9B7FD4);
-  static const spineGreen = Color(0xFF4A9E7A);
-}
+// ── Book cover helper ─────────────────────────────────────────────────────────
 
 class BookCover extends StatelessWidget {
   final String url;
-
   const BookCover({super.key, required this.url});
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     if (url.trim().isEmpty) {
-      return Container(
-        color: AppColors.surface,
-        child: const Icon(Icons.menu_book_rounded),
-      );
+      return _placeholder(c);
     }
-
     if (url.startsWith('http')) {
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) {
-          return Container(
-            color: AppColors.surface,
-            child: const Icon(Icons.broken_image),
-          );
-        },
-      );
+      return Image.network(url, fit: BoxFit.cover,
+          errorBuilder: (ctx, e, s) => _placeholder(c));
     }
-
-    return Image.file(
-      File(url), // IMPORTANT for your manual entry case
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) {
-        return Container(
-          color: AppColors.surface,
-          child: const Icon(Icons.broken_image),
-        );
-      },
-    );
+    if (kIsWeb) return _placeholder(c);
+    return Image.file(File(url), fit: BoxFit.cover,
+        errorBuilder: (ctx, e, s) => _placeholder(c));
   }
+
+  Widget _placeholder(AppPalette c) => Container(
+        color: c.surfaceAlt,
+        child: Center(child: Icon(Icons.menu_book_rounded, color: c.textMuted, size: 28)),
+      );
 }
 
-// ─────────────────────────────────────────────────────────────
-// LIBRARY PAGE
-// Displays:
-// • Reading books
-// • Want to read books
-// • Completed books
-//
-// Features:
-// • Realtime Firebase updates
-// • Category filtering
-// • Multi-selection
-// • Delete selected books
-// • Progress bars
-// ─────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
-
   @override
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
-// Widget buildCover(String url) {
-//   if (url.isEmpty) {
-//     return Container(
-//       color: AppColors.surface,
-//       child: const Icon(Icons.menu_book_rounded),
-//     );
-//   }
-
-//   if (url.startsWith('http')) {
-//     return Image.network(url, fit: BoxFit.cover);
-//   }
-
-//   return Image.asset(url, fit: BoxFit.cover);
-// }
-
 class _LibraryPageState extends State<LibraryPage>
     with SingleTickerProviderStateMixin {
-  // TAB CONTROLLER
   late final TabController _tabController;
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final PreferencesService _preferencesService = PreferencesService();
-  final LibraryService _libraryService = LibraryService();
+  final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
+  final _preferencesService = PreferencesService();
+  final _libraryService = LibraryService();
 
-  // CATEGORY FILTER
-  int _selectedCategory = 0;
-
-  // LOADING
   bool _isLoading = true;
-
-  bool _showSuggestions = true;
-
   List<BookModel> _readingBooks = [];
   List<BookModel> _wantToReadBooks = [];
   List<BookModel> _completedBooks = [];
   List<BookModel> _suggestedBooks = [];
   List<String> _preferredGenres = [];
   bool _loadingSuggestions = true;
+  Set<String> _selected = {};
 
-  // SELECTED BOOKS
-  Set<String> selectedBooks = {};
-
-  // SELECTION MODE
-  bool get isSelectionMode => selectedBooks.isNotEmpty;
-
-  // CATEGORIES
-  static const List<String> _categories = [
-    'All',
-    'Motivation',
-    'Programming',
-    'Finance',
-    'Psychology',
-    'Productivity',
-    'Philosophy',
-  ];
-
-  // CURRENT TAB BOOKS + FILTER
-  List<BookModel> get _currentList {
-    List<BookModel> books = [
-      _readingBooks,
-      _wantToReadBooks,
-      _completedBooks,
-    ][_tabController.index];
-
-    // ALL CATEGORY
-    if (_selectedCategory == 0) {
-      return books;
-    }
-
-    // FILTERED CATEGORY
-    final selectedCategory = _categories[_selectedCategory];
-
-    return books.where((book) {
-      return book.category == selectedCategory;
-    }).toList();
-  }
-
-  // ───────────────────────────────────────────────────────────
-  // INIT
-  // ───────────────────────────────────────────────────────────
+  bool get _isSelecting => _selected.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-
     _tabController = TabController(length: 3, vsync: this)
-      ..addListener(() {
-        setState(() {});
-      });
-
-    listenToLibrary();
+      ..addListener(() => setState(() {}));
+    _listenToLibrary();
   }
 
   @override
@@ -200,14 +80,14 @@ class _LibraryPageState extends State<LibraryPage>
     super.dispose();
   }
 
-  // ───────────────────────────────────────────────────────────
-  // REALTIME FIREBASE LISTENER
-  // Automatically updates library instantly
-  // ───────────────────────────────────────────────────────────
+  List<BookModel> get _currentList => [
+        _readingBooks,
+        _wantToReadBooks,
+        _completedBooks,
+      ][_tabController.index];
 
-  void listenToLibrary() {
+  void _listenToLibrary() {
     final user = _auth.currentUser;
-
     if (user == null) return;
 
     _firestore
@@ -216,811 +96,592 @@ class _LibraryPageState extends State<LibraryPage>
         .collection('library')
         .snapshots()
         .listen((snapshot) async {
-          List<BookModel> readingTemp = [];
-          List<BookModel> wantTemp = [];
-          List<BookModel> completedTemp = [];
+      List<BookModel> reading = [], want = [], completed = [];
 
-          for (var doc in snapshot.docs) {
-            final data = doc.data();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final bookDoc =
+            await _firestore.collection('books').doc(doc.id).get();
+        if (!bookDoc.exists) continue;
+        final bd = bookDoc.data()!;
+        final book = BookModel(
+          id: bookDoc.id,
+          title: bd['title'] ?? '',
+          author: bd['author'] ?? '',
+          description: bd['description'] ?? '',
+          category: bd['category'] ?? '',
+          coverUrl: bd['coverUrl'] ?? '',
+          pdfUrl: bd['pdfUrl'] ?? '',
+          totalPages: bd['totalPages'] ?? 0,
+          progress: (data['progress'] ?? 0).toDouble(),
+        );
+        switch (data['status'] as String? ?? '') {
+          case 'reading':
+            reading.add(book);
+          case 'want_to_read':
+            want.add(book);
+          case 'completed':
+            completed.add(book);
+        }
+      }
 
-            final status = data['status'] ?? '';
-
-            // GET BOOK DATA
-            final bookDoc = await _firestore
-                .collection('books')
-                .doc(doc.id)
-                .get();
-
-            if (!bookDoc.exists) continue;
-
-            final bookData = bookDoc.data()!;
-
-            final book = BookModel(
-              id: bookDoc.id,
-              title: bookData['title'] ?? '',
-              author: bookData['author'] ?? '',
-              description: bookData['description'] ?? '',
-              category: bookData['category'] ?? '',
-              coverUrl: bookData['coverUrl'] ?? '',
-              pdfUrl: bookData['pdfUrl'] ?? '',
-              totalPages: bookData['totalPages'] ?? 0,
-              progress: (data['progress'] ?? 0).toDouble(),
-            );
-
-            // ADD TO CORRECT SECTION
-            if (status == "reading") {
-              readingTemp.add(book);
-            } else if (status == "want_to_read") {
-              wantTemp.add(book);
-            } else if (status == "completed") {
-              completedTemp.add(book);
-            }
-          }
-
-          if (!mounted) return;
-
-          setState(() {
-            _readingBooks = readingTemp;
-            _wantToReadBooks = wantTemp;
-            _completedBooks = completedTemp;
-            _isLoading = false;
-          });
-
-          _refreshSuggestions();
-        });
+      if (!mounted) return;
+      setState(() {
+        _readingBooks = reading;
+        _wantToReadBooks = want;
+        _completedBooks = completed;
+        _isLoading = false;
+      });
+      _refreshSuggestions();
+    });
   }
 
-  Set<String> get _libraryBookIds => {
-    ..._readingBooks.map((b) => b.id),
-    ..._wantToReadBooks.map((b) => b.id),
-    ..._completedBooks.map((b) => b.id),
-  };
+  Set<String> get _libraryIds => {
+        ..._readingBooks.map((b) => b.id),
+        ..._wantToReadBooks.map((b) => b.id),
+        ..._completedBooks.map((b) => b.id),
+      };
 
   Future<void> _refreshSuggestions() async {
     final user = _auth.currentUser;
-    if (user == null) {
-      if (mounted) {
-        setState(() {
-          _suggestedBooks = [];
-          _preferredGenres = [];
-          _loadingSuggestions = false;
-        });
-      }
-      return;
-    }
-
+    if (user == null) return;
     final prefs = await _preferencesService.getUserPreferences(user.uid);
-    final genres = prefs?.preferredGenres ?? [];
-
     final suggested = await _preferencesService.getSuggestedBooks(
-      uid: user.uid,
-      libraryBookIds: _libraryBookIds,
-    );
-
+        uid: user.uid, libraryBookIds: _libraryIds);
     if (!mounted) return;
     setState(() {
-      _preferredGenres = genres;
+      _preferredGenres = prefs?.preferredGenres ?? [];
       _suggestedBooks = suggested;
       _loadingSuggestions = false;
     });
   }
 
-  Future<void> _addSuggestedBook(BookModel book) async {
+  Future<void> _addSuggested(BookModel book) async {
     await _libraryService.addBook(
-      bookId: book.id,
-      status: 'want_to_read',
-      totalPages: book.totalPages,
-    );
-
+        bookId: book.id, status: 'want_to_read', totalPages: book.totalPages);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${book.title} added to Want to read')),
+      SnackBar(
+        content: Text('Added "${book.title}" to Want to read',
+            style: GoogleFonts.outfit()),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
     _refreshSuggestions();
   }
 
-  // ───────────────────────────────────────────────────────────
-  // DELETE SELECTED BOOKS
-  // ───────────────────────────────────────────────────────────
-
-  Future<void> deleteSelectedBooks() async {
+  Future<void> _deleteSelected() async {
     final user = _auth.currentUser;
-
     if (user == null) return;
-
-    for (String bookId in selectedBooks) {
+    for (final id in _selected) {
       await _firestore
           .collection('users')
           .doc(user.uid)
           .collection('library')
-          .doc(bookId)
+          .doc(id)
           .delete();
     }
-
-    setState(() {
-      selectedBooks.clear();
-    });
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Books removed from library")));
+    setState(() => _selected.clear());
   }
 
-  // ───────────────────────────────────────────────────────────
-  // CONFIRM DELETE POPUP
-  // ───────────────────────────────────────────────────────────
-
-  void showDeleteDialog() {
+  void _confirmDelete(AppPalette c) {
     showDialog(
       context: context,
-      builder: (_) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+      builder: (_) => AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Remove ${_selected.length} book${_selected.length == 1 ? '' : 's'}?',
+            style: GoogleFonts.outfit(color: c.text, fontWeight: FontWeight.w600)),
+        content: Text('They will be removed from your library.',
+            style: GoogleFonts.outfit(color: c.textSub)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: c.textSub)),
           ),
-
-          title: Text(
-            'Remove Books?',
-            style: GoogleFonts.outfit(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteSelected();
+            },
+            style: FilledButton.styleFrom(backgroundColor: c.red),
+            child: Text('Remove', style: GoogleFonts.outfit(color: Colors.white)),
           ),
-
-          content: Text(
-            'Do you want to remove the selected books from your library?',
-            style: GoogleFonts.outfit(color: AppColors.textMuted),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.outfit(color: AppColors.textMuted),
-              ),
-            ),
-
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-
-                await deleteSelectedBooks();
-              },
-
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-
-              child: Text(
-                'Delete',
-                style: GoogleFonts.outfit(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
-  // ───────────────────────────────────────────────────────────
-  // UI
-  // ───────────────────────────────────────────────────────────
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final top = MediaQuery.of(context).padding.top;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
-
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(),
-            _buildTabBar(),
-            if (_preferredGenres.isNotEmpty && _showSuggestions)
-              _buildSuggestedSection(),
-            _buildCategoryChips(),
-
-            Expanded(child: _buildGrid()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ───────────────────────────────────────────────────────────
-  // TOP BAR
-  // ───────────────────────────────────────────────────────────
-
-  Widget _buildTopBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
+      backgroundColor: c.bg,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // TITLE
-          Text(
-            isSelectionMode ? '${selectedBooks.length} selected' : 'My Library',
-
-            style: GoogleFonts.cormorantGaramond(
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
-              fontStyle: FontStyle.italic,
-              color: AppColors.gold,
+          // ── Header ──────────────────────────────────────────────────────
+          Container(
+            color: c.surface,
+            padding: EdgeInsets.fromLTRB(20, top + 16, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isSelecting
+                                ? '${_selected.length} selected'
+                                : 'My Library',
+                            style: GoogleFonts.cormorantGaramond(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w700,
+                              color: c.text,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _isLoading
+                                ? 'Loading…'
+                                : '${_readingBooks.length + _wantToReadBooks.length + _completedBooks.length} books total',
+                            style: GoogleFonts.outfit(
+                                fontSize: 13, color: c.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_isSelecting) ...[
+                      _HeaderBtn(
+                        icon: Icons.close_rounded,
+                        color: c.textSub,
+                        bg: c.surfaceAlt,
+                        onTap: () => setState(() => _selected.clear()),
+                      ),
+                      const SizedBox(width: 8),
+                      _HeaderBtn(
+                        icon: Icons.delete_outline_rounded,
+                        color: c.red,
+                        bg: c.red.withValues(alpha: 0.1),
+                        onTap: () => _confirmDelete(c),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // ── Tabs ───────────────────────────────────────────────
+                TabBar(
+                  controller: _tabController,
+                  labelColor: c.brand,
+                  unselectedLabelColor: c.textMuted,
+                  indicatorColor: c.brand,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  dividerColor: Colors.transparent,
+                  labelStyle: GoogleFonts.outfit(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                  unselectedLabelStyle:
+                      GoogleFonts.outfit(fontSize: 14),
+                  tabs: [
+                    Tab(text: 'Reading (${_readingBooks.length})'),
+                    Tab(text: 'Want to read (${_wantToReadBooks.length})'),
+                    Tab(text: 'Done (${_completedBooks.length})'),
+                  ],
+                ),
+              ],
             ),
           ),
+          Divider(height: 1, color: c.border),
 
-          // DELETE ICON
-          if (isSelectionMode)
-            GestureDetector(
-              onTap: showDeleteDialog,
+          // ── Body ────────────────────────────────────────────────────────
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: c.brand))
+                : CustomScrollView(
+                    slivers: [
+                      // Suggestions strip (only on Want to read tab)
+                      if (_tabController.index == 1 &&
+                          _preferredGenres.isNotEmpty)
+                        SliverToBoxAdapter(
+                            child: _SuggestionsStrip(
+                          books: _suggestedBooks,
+                          loading: _loadingSuggestions,
+                          genres: _preferredGenres,
+                          onAdd: _addSuggested,
+                          onOpen: (b) => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => BookDetailPage(book: b)),
+                          ),
+                        )),
 
-              child: Container(
-                width: 38,
-                height: 38,
-
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-
-                child: const Icon(Icons.delete_rounded, color: Colors.red),
-              ),
-            ),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _showSuggestions = !_showSuggestions;
-              });
-            },
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _showSuggestions
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: AppColors.textMuted,
-                size: 18,
-              ),
-            ),
+                      // Book grid
+                      _currentList.isEmpty
+                          ? SliverFillRemaining(
+                              child: _EmptyState(
+                                  tab: _tabController.index, c: c))
+                          : SliverPadding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                              sliver: SliverGrid(
+                                delegate: SliverChildBuilderDelegate(
+                                  (ctx, i) => _BookTile(
+                                    book: _currentList[i],
+                                    showProgress: _tabController.index == 0,
+                                    isSelected:
+                                        _selected.contains(_currentList[i].id),
+                                    onTap: () {
+                                      final book = _currentList[i];
+                                      if (_isSelecting) {
+                                        setState(() => _selected.contains(book.id)
+                                            ? _selected.remove(book.id)
+                                            : _selected.add(book.id));
+                                        return;
+                                      }
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                BookDetailPage(book: book)),
+                                      );
+                                    },
+                                    onLongPress: () => setState(
+                                        () => _selected.add(_currentList[i].id)),
+                                  ),
+                                  childCount: _currentList.length,
+                                ),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 0.52,
+                                ),
+                              ),
+                            ),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
+}
 
-  // ───────────────────────────────────────────────────────────
-  // TAB BAR
-  // ───────────────────────────────────────────────────────────
+// ── Header icon button ────────────────────────────────────────────────────────
 
-  Widget _buildTabBar() {
+class _HeaderBtn extends StatelessWidget {
+  const _HeaderBtn(
+      {required this.icon,
+      required this.color,
+      required this.bg,
+      required this.onTap});
+  final IconData icon;
+  final Color color, bg;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 20),
+        ),
+      );
+}
+
+// ── Suggestions strip ─────────────────────────────────────────────────────────
+
+class _SuggestionsStrip extends StatelessWidget {
+  const _SuggestionsStrip({
+    required this.books,
+    required this.loading,
+    required this.genres,
+    required this.onAdd,
+    required this.onOpen,
+  });
+
+  final List<BookModel> books;
+  final bool loading;
+  final List<String> genres;
+  final void Function(BookModel) onAdd;
+  final void Function(BookModel) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return Container(
-      margin: const EdgeInsets.only(top: 20, bottom: 10),
-
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-
-      child: TabBar(
-        controller: _tabController,
-
-        labelColor: AppColors.gold,
-        unselectedLabelColor: AppColors.textMuted,
-
-        indicatorColor: AppColors.gold,
-        dividerColor: Colors.transparent,
-
-        tabs: const [
-          Tab(text: 'Reading'),
-          Tab(text: 'Want to read'),
-          Tab(text: 'Completed'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestedSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      color: c.surface,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                'Suggested for you',
-                style: GoogleFonts.cormorantGaramond(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.gold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _loadingSuggestions
-                    ? 'Loading picks…'
-                    : 'Based on ${_preferredGenres.take(3).join(', ')}${_preferredGenres.length > 3 ? '…' : ''}',
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
+              Icon(Icons.auto_awesome_rounded, size: 15, color: c.brand),
+              const SizedBox(width: 6),
+              Text('Suggested for you',
+                  style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: c.text)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '· ${genres.take(2).join(', ')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(fontSize: 12, color: c.textMuted),
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 188,
-          child: _loadingSuggestions
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.gold),
-                )
-              : _suggestedBooks.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22),
-                    child: Text(
-                      'No new suggestions — explore Search to add books in your favorite genres.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  itemCount: _suggestedBooks.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 14),
-                  itemBuilder: (_, i) {
-                    final book = _suggestedBooks[i];
-                    return _SuggestedBookCard(
-                      book: book,
-                      onOpen: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BookDetailPage(book: book),
-                          ),
-                        );
-                      },
-                      onAdd: () => _addSuggestedBook(book),
-                    );
-                  },
-                ),
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-  // ───────────────────────────────────────────────────────────
-  // CATEGORY CHIPS
-  // ───────────────────────────────────────────────────────────
-
-  Widget _buildCategoryChips() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-
-      children: [
-        SizedBox(
-          height: 44,
-
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
-
-            itemCount: _categories.length,
-
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-
-            itemBuilder: (_, i) {
-              final active = i == _selectedCategory;
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedCategory = i;
-                  });
-                },
-
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 5,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.gold : Colors.transparent,
-
-                    borderRadius: BorderRadius.circular(20),
-
-                    border: Border.all(
-                      color: active ? AppColors.gold : AppColors.border,
-                    ),
-                  ),
-
-                  child: Text(
-                    _categories[i],
-
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: active ? AppColors.bg : AppColors.textMuted,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-
-          child: Text(
-            '${_currentList.length} books',
-
-            style: GoogleFonts.outfit(fontSize: 11, color: AppColors.textMuted),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ───────────────────────────────────────────────────────────
-  // GRID
-  // ───────────────────────────────────────────────────────────
-
-  Widget _buildGrid() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.gold),
-      );
-    }
-
-    final books = _currentList;
-
-    if (books.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 100),
-
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 20,
-        childAspectRatio: 0.52,
-      ),
-
-      itemCount: books.length,
-
-      itemBuilder: (_, i) {
-        final book = books[i];
-
-        return _BookGridItem(
-          book: book,
-          showProgress: _tabController.index != 1,
-
-          isSelected: selectedBooks.contains(book.id),
-
-          onTap: () {
-            // SELECTION MODE
-            if (isSelectionMode) {
-              setState(() {
-                if (selectedBooks.contains(book.id)) {
-                  selectedBooks.remove(book.id);
-                } else {
-                  selectedBooks.add(book.id);
-                }
-              });
-
-              return;
-            }
-
-            // NORMAL OPEN
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => BookDetailPage(book: book)),
-            );
-          },
-
-          onLongPress: () {
-            setState(() {
-              selectedBooks.add(book.id);
-            });
-          },
-        );
-      },
-    );
-  }
-
-  // ───────────────────────────────────────────────────────────
-  // EMPTY STATE
-  // ───────────────────────────────────────────────────────────
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-
-        children: [
-          Icon(Icons.menu_book_rounded, size: 48, color: AppColors.textMuted),
-
           const SizedBox(height: 12),
-
-          Text(
-            'No books here yet',
-
-            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMuted),
+          SizedBox(
+            height: 170,
+            child: loading
+                ? Center(child: CircularProgressIndicator(color: c.brand))
+                : books.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Explore Discover to find books in your genres',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12, color: c.textMuted),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: books.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 12),
+                        itemBuilder: (_, i) => _SuggestCard(
+                          book: books[i],
+                          onAdd: () => onAdd(books[i]),
+                          onOpen: () => onOpen(books[i]),
+                        ),
+                      ),
           ),
+          const SizedBox(height: 12),
+          Divider(color: c.border, height: 1),
         ],
       ),
     );
   }
 }
 
-class _SuggestedBookCard extends StatelessWidget {
-  const _SuggestedBookCard({
-    required this.book,
-    required this.onOpen,
-    required this.onAdd,
-  });
-
+class _SuggestCard extends StatelessWidget {
+  const _SuggestCard(
+      {required this.book, required this.onAdd, required this.onOpen});
   final BookModel book;
-  final VoidCallback onOpen;
-  final VoidCallback onAdd;
+  final VoidCallback onAdd, onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return GestureDetector(
       onTap: onOpen,
       child: SizedBox(
-        width: 108,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: BookCover(url: book.coverUrl)
-                    ),
-                  ),
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: GestureDetector(
-                      onTap: onAdd,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: AppColors.gold,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.add_rounded,
-                          size: 16,
-                          color: AppColors.bg,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+        width: 96,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Stack(children: [
+              Positioned.fill(
+                child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: BookCover(url: book.coverUrl)),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              book.title,
+              Positioned(
+                bottom: 6,
+                right: 6,
+                child: GestureDetector(
+                  onTap: onAdd,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                        color: c.brand, shape: BoxShape.circle),
+                    child: const Icon(Icons.add_rounded,
+                        size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 5),
+          Text(book.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.outfit(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            Text(
-              book.category,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gold),
-            ),
-          ],
-        ),
+                  fontSize: 11, fontWeight: FontWeight.w500, color: c.text)),
+        ]),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// BOOK ITEM
-// ─────────────────────────────────────────────────────────────
+// ── Book tile ─────────────────────────────────────────────────────────────────
 
-class _BookGridItem extends StatelessWidget {
-  const _BookGridItem({
+class _BookTile extends StatelessWidget {
+  const _BookTile({
     required this.book,
     required this.showProgress,
+    required this.isSelected,
     required this.onTap,
     required this.onLongPress,
-    required this.isSelected,
   });
 
   final BookModel book;
-  final bool showProgress;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final bool isSelected;
+  final bool showProgress, isSelected;
+  final VoidCallback onTap, onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     final pct = (book.progress * 100).round();
 
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                // COVER
-                Positioned.fill(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-
-                    child: BookCover(url: book.coverUrl)
-                  ),
-                ),
-
-                // FAVORITE HEART
-                Positioned(
-                  top: 8,
-                  right: 8,
-
-                  child: StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser!.uid)
-                        .collection('favorites')
-                        .doc(book.id)
-                        .snapshots(),
-
-                    builder: (context, snapshot) {
-                      final isFavorite = snapshot.data?.exists ?? false;
-
-                      if (!isFavorite) {
-                        return const SizedBox();
-                      }
-
-                      return Container(
-                        padding: const EdgeInsets.all(6),
-
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          shape: BoxShape.circle,
-                        ),
-
-                        child: const Icon(
-                          Icons.favorite_rounded,
-                          color: Colors.red,
-                          size: 16,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                // SELECTION OVERLAY
-                if (isSelected)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(12),
-
-                        border: Border.all(color: AppColors.gold, width: 2),
-                      ),
-                    ),
-                  ),
-
-                // CHECK ICON
-                if (isSelected)
-                  const Positioned(
-                    top: 8,
-                    right: 8,
-
-                    child: CircleAvatar(
-                      radius: 12,
-                      backgroundColor: AppColors.gold,
-
-                      child: Icon(Icons.check, size: 14, color: Colors.black),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 7),
-
-          // PROGRESS
-          if (showProgress) ...[
-            Text(
-              '$pct%',
-
-              style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gold),
-            ),
-
-            const SizedBox(height: 4),
-
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-
-              child: LinearProgressIndicator(
-                value: book.progress,
-                minHeight: 4,
-
-                backgroundColor: Colors.white10,
-
-                valueColor: const AlwaysStoppedAnimation(AppColors.gold),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Stack(children: [
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: BookCover(url: book.coverUrl),
               ),
             ),
-
-            const SizedBox(height: 6),
-          ],
-
-          // TITLE
-          Text(
-            book.title,
-
+            // Favourite indicator
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(FirebaseAuth.instance.currentUser!.uid)
+                  .collection('favorites')
+                  .doc(book.id)
+                  .snapshots(),
+              builder: (_, snap) {
+                if (!(snap.data?.exists ?? false)) return const SizedBox();
+                return Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.favorite_rounded,
+                        color: Colors.red, size: 12),
+                  ),
+                );
+              },
+            ),
+            // Selection overlay
+            if (isSelected)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: c.brand.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.brand, width: 2),
+                  ),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration:
+                          BoxDecoration(color: c.brand, shape: BoxShape.circle),
+                      child: const Icon(Icons.check,
+                          size: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 7),
+        if (showProgress) ...[
+          Row(children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: book.progress,
+                  minHeight: 3,
+                  backgroundColor: c.surfaceAlt,
+                  valueColor: AlwaysStoppedAnimation(c.brand),
+                ),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text('$pct%',
+                style: GoogleFonts.outfit(fontSize: 9, color: c.brand)),
+          ]),
+          const SizedBox(height: 5),
+        ],
+        Text(book.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-
             style: GoogleFonts.outfit(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
-            ),
-          ),
-
-          const SizedBox(height: 2),
-
-          // AUTHOR
-          Text(
-            book.author,
-
+                fontSize: 11, fontWeight: FontWeight.w500, color: c.text)),
+        const SizedBox(height: 1),
+        Text(book.author,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.outfit(fontSize: 10, color: c.textMuted)),
+      ]),
+    );
+  }
+}
 
-            style: GoogleFonts.outfit(fontSize: 10, color: AppColors.textMuted),
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.tab, required this.c});
+  final int tab;
+  final AppPalette c;
+
+  static const _messages = [
+    ('No books in progress', 'Find something in Discover and start reading'),
+    ('Nothing saved yet', 'Tap + to add books you want to read'),
+    ('No finished books yet', 'Complete a book to see it here'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final (title, sub) = _messages[tab];
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration:
+                BoxDecoration(color: c.brandSoft, shape: BoxShape.circle),
+            child: Icon(Icons.menu_book_rounded, size: 30, color: c.brand),
           ),
-        ],
+          const SizedBox(height: 16),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: c.text)),
+          const SizedBox(height: 6),
+          Text(sub,
+              textAlign: TextAlign.center,
+              style:
+                  GoogleFonts.outfit(fontSize: 13, color: c.textMuted)),
+        ]),
       ),
     );
   }

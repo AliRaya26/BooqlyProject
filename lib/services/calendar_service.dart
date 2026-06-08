@@ -238,8 +238,7 @@ class CalendarService {
 
     final now = DateTime.now();
     final dayStart = DateTime(now.year, now.month, now.day, _dayStartHour);
-    final dayEnd =
-        DateTime(now.year, now.month, now.day).add(const Duration(hours: 24));
+    final dayEnd = DateTime(now.year, now.month, now.day, _dayEndHour);
 
     final api = cal.CalendarApi(client);
     final response = await api.events.list(

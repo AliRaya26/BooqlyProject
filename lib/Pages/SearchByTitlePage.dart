@@ -3,6 +3,7 @@ import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
@@ -52,6 +53,15 @@ Widget buildCover(
           child: const Icon(Icons.broken_image),
         );
       },
+    );
+  }
+
+  if (kIsWeb) {
+    return Container(
+      width: width,
+      height: height,
+      color: AppColors.surface,
+      child: const Icon(Icons.menu_book_rounded),
     );
   }
 

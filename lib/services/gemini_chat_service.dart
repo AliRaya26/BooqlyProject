@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/models/feedback_model.dart';
 import 'package:booqly/services/book_service.dart';
@@ -68,12 +69,50 @@ class GeminiChatService {
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta';
 
-  /// Models tried in order until one works (lite first — separate free-tier quotas).
+  // ── In-app key persistence ───────────────────────────────────────────────
+  static const _prefKey = 'gemini_api_key';
+  static String? _cachedApiKey;
+
+  /// Call once at app startup to restore any key the user saved in Settings.
+  static Future<void> loadSavedApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    _cachedApiKey = prefs.getString(_prefKey);
+  }
+
+  /// Save [key] so it persists across restarts and takes highest priority.
+  static Future<void> saveApiKey(String key) async {
+    final trimmed = key.trim();
+    _cachedApiKey = trimmed.isEmpty ? null : trimmed;
+    final prefs = await SharedPreferences.getInstance();
+    if (trimmed.isEmpty) {
+      await prefs.remove(_prefKey);
+    } else {
+      await prefs.setString(_prefKey, trimmed);
+    }
+  }
+
+  /// Remove any in-app saved key (falls back to config.env / dart-define).
+  static Future<void> clearSavedApiKey() async {
+    _cachedApiKey = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKey);
+  }
+
+  /// True when a key is saved in-app (not just from config.env).
+  static bool get hasSavedApiKey =>
+      _cachedApiKey != null && _cachedApiKey!.isNotEmpty;
+
+  /// The raw in-app saved key (null if none). Used by SettingsPage to mask it.
+  static String? get savedApiKey => _cachedApiKey;
+
+  /// Models tried in order until one works.
+  /// gemini-2.0-flash is first — highest free-tier quota (1500 req/day).
+  /// gemini-2.5-flash is last — lower free quota, only used as last resort.
   static const _modelIds = [
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash-lite',
     'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
     'gemini-flash-lite-latest',
+    'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
   ];
 
@@ -92,9 +131,16 @@ class GeminiChatService {
   }
 
   String get apiKey {
+    // 1. In-app saved key (highest priority — user entered it in Settings)
+    if (_cachedApiKey != null && _cachedApiKey!.isNotEmpty) {
+      return _cachedApiKey!;
+    }
+
+    // 2. --dart-define at build time
     const fromDefine = String.fromEnvironment('GEMINI_API_KEY');
     if (fromDefine.trim().isNotEmpty) return fromDefine.trim();
 
+    // 3. assets/config.env
     var key = dotenv.env['GEMINI_API_KEY']?.trim() ?? '';
     if ((key.startsWith('"') && key.endsWith('"')) ||
         (key.startsWith("'") && key.endsWith("'"))) {
@@ -415,8 +461,14 @@ class GeminiChatService {
       }
     }
 
+    // Check if all failures were quota-related
+    final isAllQuota = lastError is GeminiApiException &&
+        (lastError as GeminiApiException).isQuotaExceeded;
     throw GeminiApiException(
-      'Could not get a response from Gemini. ${lastError ?? "Try again later."}',
+      isAllQuota
+          ? 'You\'ve used up the free quota for today. It resets at midnight (Pacific Time). Try again tomorrow or wait a few minutes — limits reset hourly on the free tier.'
+          : 'Could not get a response from Gemini. ${lastError ?? "Try again later."}',
+      isQuotaExceeded: isAllQuota,
     );
   }
 

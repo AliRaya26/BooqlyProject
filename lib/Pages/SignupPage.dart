@@ -4,15 +4,11 @@ import 'package:booqly/services/auth_service.dart';
 import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/google_oauth_config.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:booqly/theme/app_colors.dart';
 import 'package:booqly/widgets/auth_scaffold.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-const _gold = Color(0xFFD4A96A);
-const _ink = Color(0xFFF5F0E8);
-const _muted = Color(0xFF888580);
-const _surf = Color(0xFF1A1713);
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -92,9 +88,7 @@ class _SignupPageState extends State<SignupPage> {
 
     if (registered == null) {
       setState(() => _isLoading = false);
-      _showMessage(
-        'Could not check email (network). Connect to Wi‑Fi and try again.',
-      );
+      _showMessage('Could not check email (network). Connect to Wi‑Fi and try again.');
       return;
     }
 
@@ -113,10 +107,6 @@ class _SignupPageState extends State<SignupPage> {
 
     if (!mounted) return;
 
-    // In debug builds we still want to proceed past a failed send so the
-    // signup flow can be exercised even when the email backend (Resend / Cloud
-    // Function) is not provisioned for this recipient. The dev code is shown
-    // prominently in the SnackBar.
     if (!sendResult.success) {
       if (kDebugMode) {
         setState(() {
@@ -132,9 +122,7 @@ class _SignupPageState extends State<SignupPage> {
         return;
       }
       setState(() => _isLoading = false);
-      _showMessage(
-        sendResult.errorMessage ?? 'Could not send verification email.',
-      );
+      _showMessage(sendResult.errorMessage ?? 'Could not send verification email.');
       return;
     }
 
@@ -246,10 +234,6 @@ class _SignupPageState extends State<SignupPage> {
       _showMessage(result.errorMessage!);
     }
 
-    // Send the welcome email on every Google sign-up attempt, not just the
-    // very first one. Firebase Auth keeps the user record forever once a
-    // Google account has been used, so `isNewUser` becomes false on every
-    // subsequent test and the email would be silently skipped otherwise.
     final email = result.user?.email?.trim() ?? '';
     final name = result.user?.displayName?.trim() ?? '';
     final firstName = name.isNotEmpty ? name.split(RegExp(r'\s+')).first : 'Reader';
@@ -260,10 +244,6 @@ class _SignupPageState extends State<SignupPage> {
     );
 
     if (email.isEmpty) {
-      debugPrint(
-        'SignupPage._signUpWithGoogle: Google account has no email, '
-        'skipping welcome email.',
-      );
       setState(() => _isLoading = false);
       _showMessage(
         'Signed in, but Google did not return an email so no welcome email was sent.',
@@ -281,21 +261,12 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = false);
 
     if (welcomeResult.success) {
-      debugPrint(
-        'SignupPage._signUpWithGoogle: welcome email sent to "$email" '
-        '(delivered=${welcomeResult.delivered}, '
-        'queuedInFirestore=${welcomeResult.queuedInFirestore})',
-      );
       _showMessage(
         result.isNewUser
             ? 'Welcome to Booqly! Confirmation sent to $email.'
             : 'Welcome back! Confirmation sent to $email.',
       );
     } else {
-      debugPrint(
-        'SignupPage._signUpWithGoogle: welcome email FAILED: '
-        '${welcomeResult.errorMessage}',
-      );
       _showMessage(
         welcomeResult.errorMessage ??
             'Signed in, but the welcome email could not be sent.',
@@ -308,12 +279,21 @@ class _SignupPageState extends State<SignupPage> {
   InputDecoration _input(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: _muted),
+      hintStyle: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 15),
+      prefixIcon: Icon(icon, color: AppColors.textMuted, size: 20),
       filled: true,
-      fillColor: _surf,
+      fillColor: AppColors.surfaceAlt,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.brand, width: 1.5),
       ),
       counterText: '',
     );
@@ -327,18 +307,24 @@ class _SignupPageState extends State<SignupPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Sign up',
-            style: GoogleFonts.cormorantGaramond(
-              fontSize: 56,
-              fontWeight: FontWeight.w600,
-              color: _gold,
+            'Create account',
+            style: GoogleFonts.outfit(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: AppColors.text,
             ),
           ),
           if (_awaitingVerification) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               'Enter the 6-digit code sent to ${_emailController.text.trim()}',
-              style: GoogleFonts.outfit(color: _muted, fontSize: 15),
+              style: GoogleFonts.outfit(color: AppColors.textSub, fontSize: 14),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              'Start tracking your reading journey.',
+              style: GoogleFonts.outfit(color: AppColors.textSub, fontSize: 15),
             ),
           ],
           const SizedBox(height: 24),
@@ -348,19 +334,19 @@ class _SignupPageState extends State<SignupPage> {
               enabled: !_isLoading,
               textInputAction: TextInputAction.next,
               textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+              style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               decoration: _input('First name', Icons.person_outline_rounded),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _lastNameController,
               enabled: !_isLoading,
               textInputAction: TextInputAction.next,
               textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+              style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               decoration: _input('Last name', Icons.person_outline_rounded),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _emailController,
               enabled: !_isLoading,
@@ -368,20 +354,20 @@ class _SignupPageState extends State<SignupPage> {
               textInputAction: TextInputAction.next,
               autocorrect: false,
               autofillHints: const [AutofillHints.email],
-              style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+              style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               decoration: _input('Email address', Icons.mail_outline_rounded),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _passwordController,
               enabled: !_isLoading,
               obscureText: true,
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.newPassword],
-              style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+              style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               decoration: _input('Password', Icons.lock_outline_rounded),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _confirmPasswordController,
               enabled: !_isLoading,
@@ -389,7 +375,7 @@ class _SignupPageState extends State<SignupPage> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _sendVerificationCode(),
               autofillHints: const [AutofillHints.newPassword],
-              style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+              style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
               decoration: _input('Confirm password', Icons.lock_outline_rounded),
             ),
           ] else ...[
@@ -400,10 +386,14 @@ class _SignupPageState extends State<SignupPage> {
               maxLength: 6,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _verifyAndSignUp(),
-              style: GoogleFonts.outfit(color: _ink, letterSpacing: 4, fontSize: 18),
+              style: GoogleFonts.outfit(
+                color: AppColors.text,
+                letterSpacing: 4,
+                fontSize: 18,
+              ),
               decoration: _input('Verification code', Icons.pin_outlined),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             TextButton(
               onPressed: _isLoading
                   ? null
@@ -411,10 +401,13 @@ class _SignupPageState extends State<SignupPage> {
                       _verificationCodeController.clear();
                       _sendVerificationCode();
                     },
-              child: Text('Resend code', style: GoogleFonts.outfit(color: _gold)),
+              child: Text(
+                'Resend code',
+                style: GoogleFonts.outfit(color: AppColors.brand),
+              ),
             ),
           ],
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           AuthPrimaryButton(
             label: _awaitingVerification
                 ? 'Verify & create account'
@@ -438,7 +431,7 @@ class _SignupPageState extends State<SignupPage> {
                       },
                 child: Text(
                   'Edit signup details',
-                  style: GoogleFonts.outfit(color: _muted),
+                  style: GoogleFonts.outfit(color: AppColors.textSub),
                 ),
               ),
             ),
@@ -447,12 +440,15 @@ class _SignupPageState extends State<SignupPage> {
             const SizedBox(height: 20),
             Row(
               children: [
-                const Expanded(child: Divider(color: Color(0xFF2A2520))),
+                const Expanded(child: Divider(color: AppColors.border)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or', style: GoogleFonts.outfit(color: _muted)),
+                  child: Text(
+                    'or',
+                    style: GoogleFonts.outfit(color: AppColors.textMuted),
+                  ),
                 ),
-                const Expanded(child: Divider(color: Color(0xFF2A2520))),
+                const Expanded(child: Divider(color: AppColors.border)),
               ],
             ),
             const SizedBox(height: 16),
@@ -461,15 +457,15 @@ class _SignupPageState extends State<SignupPage> {
               height: 52,
               child: OutlinedButton.icon(
                 onPressed: _isLoading ? null : _signUpWithGoogle,
-                icon: const Icon(Icons.g_mobiledata, color: _gold, size: 28),
+                icon: const Icon(Icons.g_mobiledata, color: AppColors.brand, size: 28),
                 label: Text(
                   'Sign up with Google',
-                  style: GoogleFonts.outfit(color: _ink, fontSize: 16),
+                  style: GoogleFonts.outfit(color: AppColors.text, fontSize: 15),
                 ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: _gold),
+                  side: const BorderSide(color: AppColors.border),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
@@ -486,9 +482,20 @@ class _SignupPageState extends State<SignupPage> {
                         MaterialPageRoute(builder: (_) => const LoginPage()),
                       );
                     },
-              child: Text(
-                'Already have an account? Sign in',
-                style: GoogleFonts.outfit(color: _muted, fontSize: 15),
+              child: Text.rich(
+                TextSpan(
+                  style: GoogleFonts.outfit(color: AppColors.textSub, fontSize: 15),
+                  children: [
+                    const TextSpan(text: 'Already have an account? '),
+                    TextSpan(
+                      text: 'Sign in',
+                      style: GoogleFonts.outfit(
+                        color: AppColors.brand,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
