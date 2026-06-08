@@ -35,20 +35,28 @@ class PublicUserProfile {
 }
 
 class FriendActivity {
-  final String uid;
+  final String ownerUid;
   final String userName;
   final String bookTitle;
+  final String bookId;       // for navigation
   final String? bookCover;
-  final String activityType; // 'reading' | 'completed' | 'added'
+  final String activityType; // 'reading' | 'completed' | 'note' | 'quote' | 'review'
   final DateTime timestamp;
+  final String? noteText;    // note/quote text
+  final int? rating;         // review star rating
+  final String? reviewText;  // review comment
 
   const FriendActivity({
-    required this.uid,
+    required this.ownerUid,
     required this.userName,
     required this.bookTitle,
+    required this.bookId,
     this.bookCover,
     required this.activityType,
     required this.timestamp,
+    this.noteText,
+    this.rating,
+    this.reviewText,
   });
 }
 
@@ -114,7 +122,6 @@ class SocialService {
     try {
       final q = query.trim().toLowerCase();
 
-      // Get following list for isFollowing check
       final followingSnap = await _db
           .collection('users')
           .doc(uid)
@@ -122,14 +129,13 @@ class SocialService {
           .get();
       final followingSet = followingSnap.docs.map((d) => d.id).toSet();
 
-      // Fetch all users and filter client-side for case-insensitive matching.
-      // The old startAt/endAt range query had a bug (endAt == startAt because
-      // '' appended = same string), so it returned nothing.
+      // Client-side filtering — the old startAt/endAt range query had a bug
+      // (endAt == startAt), so we fetch up to 200 users and filter locally.
       final snap = await _db.collection('users').limit(200).get();
 
       final results = <PublicUserProfile>[];
       for (final doc in snap.docs) {
-        if (doc.id == uid) continue; // exclude self
+        if (doc.id == uid) continue;
         final data = doc.data();
         final first = (data['firstName'] as String? ?? '').toLowerCase();
         final last  = (data['lastName']  as String? ?? '').toLowerCase();
@@ -151,11 +157,10 @@ class SocialService {
     Map<String, dynamic> data,
     Set<String> followingSet,
   ) async {
-    // Get their current reading book
     String? currentBookTitle;
     String? currentBookCover;
     int booksCompleted = 0;
-    int streak = 0;
+    const int streak = 0;
 
     try {
       final librarySnap = await _db
@@ -238,7 +243,8 @@ class SocialService {
       if (uids.isEmpty) return [];
 
       final activities = <FriendActivity>[];
-      final since = DateTime.now().subtract(const Duration(days: 7));
+      final since = DateTime.now().subtract(const Duration(days: 30));
+      final sinceTs = Timestamp.fromDate(since);
 
       for (final targetUid in uids.take(10)) {
         final userDoc = await _db.collection('users').doc(targetUid).get();
@@ -247,33 +253,140 @@ class SocialService {
         final name =
             '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'.trim();
 
-        // Recent reading sessions
-        final sessionSnap = await _db
-            .collection('users')
-            .doc(targetUid)
-            .collection('readingSessions')
-            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-            .orderBy('date', descending: true)
-            .limit(3)
-            .get();
+        // ── Reading sessions ───────────────────────────────────────────────
+        try {
+          final sessionSnap = await _db
+              .collection('users')
+              .doc(targetUid)
+              .collection('readingSessions')
+              .where('date', isGreaterThanOrEqualTo: sinceTs)
+              .orderBy('date', descending: true)
+              .limit(3)
+              .get();
 
-        for (final s in sessionSnap.docs) {
-          final sd = s.data();
-          activities.add(FriendActivity(
-            uid: targetUid,
-            userName: name,
-            bookTitle: sd['bookTitle'] as String? ?? 'a book',
-            activityType: 'reading',
-            timestamp: (sd['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          ));
-        }
+          for (final s in sessionSnap.docs) {
+            final sd = s.data();
+            activities.add(FriendActivity(
+              ownerUid: targetUid,
+              userName: name,
+              bookTitle: sd['bookTitle'] as String? ?? 'a book',
+              bookId: sd['bookId'] as String? ?? '',
+              activityType: 'reading',
+              timestamp: (sd['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            ));
+          }
+        } catch (_) {}
+
+        // ── Notes & quotes ─────────────────────────────────────────────────
+        try {
+          // Get their recently active library books (limit 5)
+          final librarySnap = await _db
+              .collection('users')
+              .doc(targetUid)
+              .collection('library')
+              .orderBy('lastReadAt', descending: true)
+              .limit(5)
+              .get();
+
+          for (final libDoc in librarySnap.docs) {
+            final ld = libDoc.data();
+            final bookId = libDoc.id;
+            final bookTitle = ld['title'] as String? ?? 'a book';
+
+            final notesSnap = await _db
+                .collection('users')
+                .doc(targetUid)
+                .collection('library')
+                .doc(bookId)
+                .collection('notes')
+                .orderBy('createdAt', descending: true)
+                .limit(2)
+                .get();
+
+            for (final n in notesSnap.docs) {
+              final nd = n.data();
+              final noteTs = (nd['createdAt'] as Timestamp?)?.toDate();
+              if (noteTs == null || noteTs.isBefore(since)) continue;
+              activities.add(FriendActivity(
+                ownerUid: targetUid,
+                userName: name,
+                bookTitle: bookTitle,
+                bookId: bookId,
+                activityType: nd['type'] == 'quote' ? 'quote' : 'note',
+                timestamp: noteTs,
+                noteText: nd['text'] as String?,
+              ));
+            }
+          }
+        } catch (_) {}
+
+        // ── Reviews ────────────────────────────────────────────────────────
+        try {
+          final reviewSnap = await _db
+              .collection('users')
+              .doc(targetUid)
+              .collection('reviews')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+
+          for (final r in reviewSnap.docs) {
+            final rd = r.data();
+            final reviewTs = (rd['createdAt'] as Timestamp?)?.toDate();
+            if (reviewTs == null || reviewTs.isBefore(since)) continue;
+            activities.add(FriendActivity(
+              ownerUid: targetUid,
+              userName: name,
+              bookTitle: rd['bookTitle'] as String? ?? 'a book',
+              bookId: rd['bookId'] as String? ?? r.id,
+              activityType: 'review',
+              timestamp: reviewTs,
+              rating: (rd['rating'] as num?)?.toInt(),
+              reviewText: rd['comment'] as String?,
+            ));
+          }
+        } catch (_) {}
       }
 
       activities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      return activities.take(30).toList();
+      return activities.take(50).toList();
     } catch (e) {
       debugPrint('SocialService.getActivityFeed: $e');
       return [];
+    }
+  }
+
+  // ── Fetch a friend's notes for a specific book ─────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getFriendNotesForBook({
+    required String friendUid,
+    required String bookId,
+  }) async {
+    try {
+      final snap = await _db
+          .collection('users')
+          .doc(friendUid)
+          .collection('library')
+          .doc(bookId)
+          .collection('notes')
+          .orderBy('createdAt', descending: true)
+          .get();
+      return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    } catch (e) {
+      debugPrint('SocialService.getFriendNotesForBook: $e');
+      return [];
+    }
+  }
+
+  // ── Fetch a book from the catalog ─────────────────────────────────────────
+
+  Future<Map<String, dynamic>?> getBookData(String bookId) async {
+    try {
+      final doc = await _db.collection('books').doc(bookId).get();
+      if (!doc.exists) return null;
+      return {'id': doc.id, ...doc.data()!};
+    } catch (_) {
+      return null;
     }
   }
 
@@ -287,8 +400,6 @@ class SocialService {
     final yearEnd = Timestamp.fromDate(DateTime(year + 1));
 
     try {
-      // Books completed this year — query by status only, filter dates client-side
-      // (avoids composite index requirement)
       final completedSnap = await _db
           .collection('users')
           .doc(uid)
@@ -301,7 +412,6 @@ class SocialService {
         return ts.compareTo(yearStart) >= 0 && ts.compareTo(yearEnd) < 0;
       }).length;
 
-      // Reading sessions stats
       final sessionsSnap = await _db
           .collection('users')
           .doc(uid)
@@ -324,7 +434,6 @@ class SocialService {
         }
       }
 
-      // Most read book
       String? topBookId;
       int topCount = 0;
       bookReadCount.forEach((bid, count) {
@@ -349,10 +458,8 @@ class SocialService {
         }
       }
 
-      // User name
       final userDoc = await _db.collection('users').doc(uid).get();
-      final firstName =
-          userDoc.data()?['firstName'] as String? ?? 'Reader';
+      final firstName = userDoc.data()?['firstName'] as String? ?? 'Reader';
 
       return {
         'year': year,

@@ -1,3 +1,6 @@
+import 'package:booqly/Pages/BookDetailPage.dart';
+import 'package:booqly/Pages/FriendNotesPage.dart';
+import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/dummy_data_service.dart';
 import 'package:booqly/services/social_service.dart';
 import 'package:booqly/theme/app_colors.dart';
@@ -44,19 +47,22 @@ class _FriendsPageState extends State<FriendsPage>
     super.dispose();
   }
 
-  /// Loads following list and auto-seeds dummy data on first open if empty.
   Future<void> _loadFollowingAndAutoSeed() async {
     setState(() => _loadingFollowing = true);
     final profiles = await _service.getFollowingProfiles();
     if (!mounted) return;
 
     if (profiles.isEmpty) {
-      // Auto-seed dummy friends so the page isn't blank on first open.
       setState(() => _seeding = true);
       await DummyDataService().seed();
       final seeded = await _service.getFollowingProfiles();
-      if (mounted) setState(() { _following = seeded; _loadingFollowing = false; _seeding = false; });
-      // Also refresh the feed now that we have friends.
+      if (mounted) {
+        setState(() {
+          _following = seeded;
+          _loadingFollowing = false;
+          _seeding = false;
+        });
+      }
       await _loadFeed();
     } else {
       if (mounted) setState(() { _following = profiles; _loadingFollowing = false; });
@@ -91,8 +97,27 @@ class _FriendsPageState extends State<FriendsPage>
       await _service.follow(profile.uid);
     }
     await _loadFollowing();
-    // Refresh search results too
     if (_lastQuery.isNotEmpty) await _search(_lastQuery + ' ');
+  }
+
+  /// Navigate to book detail page (fetches from catalog; shows snackbar if not found).
+  Future<void> _openBook(BuildContext ctx, FriendActivity activity) async {
+    final c = AppColors.of(ctx);
+    final data = await _service.getBookData(activity.bookId);
+    if (!ctx.mounted) return;
+    if (data != null) {
+      final book = BookModel.fromMap(data, data['id'] as String);
+      Navigator.push(ctx, MaterialPageRoute(builder: (_) => BookDetailPage(book: book)));
+    } else {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+        content: Text(
+          '"${activity.bookTitle}" is not in the Booqly catalog yet.',
+          style: GoogleFonts.outfit(),
+        ),
+        backgroundColor: c.brand,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 
   @override
@@ -106,10 +131,9 @@ class _FriendsPageState extends State<FriendsPage>
         title: Text(
           'Friends',
           style: GoogleFonts.cormorantGaramond(
-            fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
+              fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
         ),
         actions: [
-          // ── Temporary seed button ────────────────────────────────────────
           _seeding
               ? Padding(
                   padding: const EdgeInsets.all(12),
@@ -120,11 +144,10 @@ class _FriendsPageState extends State<FriendsPage>
                 )
               : IconButton(
                   icon: Icon(Icons.science_outlined, color: c.textMuted),
-                  tooltip: 'Load dummy data',
+                  tooltip: 'Reload dummy data',
                   onPressed: () async {
                     setState(() => _seeding = true);
                     await DummyDataService().seed();
-                    // Sequential to avoid racing setState calls from both loaders.
                     await _loadFollowing();
                     await _loadFeed();
                     if (mounted) setState(() => _seeding = false);
@@ -142,7 +165,7 @@ class _FriendsPageState extends State<FriendsPage>
           tabs: const [
             Tab(text: 'Following'),
             Tab(text: 'Activity'),
-            Tab(text: 'Find people'),
+            Tab(text: 'Find People'),
           ],
         ),
       ),
@@ -192,7 +215,8 @@ class _FriendsPageState extends State<FriendsPage>
             Icon(Icons.local_fire_department_rounded, color: c.textMuted, size: 48),
             const SizedBox(height: 16),
             Text('No recent activity',
-                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: c.text)),
+                style: GoogleFonts.outfit(
+                    fontSize: 18, fontWeight: FontWeight.w600, color: c.text)),
             const SizedBox(height: 8),
             Text('Follow readers to see what they\'re up to.',
                 style: GoogleFonts.outfit(fontSize: 14, color: c.textMuted),
@@ -208,9 +232,31 @@ class _FriendsPageState extends State<FriendsPage>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         itemCount: _feed.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) => _ActivityCard(activity: _feed[i], c: c),
+        itemBuilder: (ctx, i) => _ActivityCard(
+          activity: _feed[i],
+          c: c,
+          onTap: () => _onActivityTap(ctx, _feed[i]),
+        ),
       ),
     );
+  }
+
+  void _onActivityTap(BuildContext ctx, FriendActivity activity) {
+    final type = activity.activityType;
+    if (type == 'note' || type == 'quote') {
+      // Open all of this friend's notes for the book
+      Navigator.push(ctx, MaterialPageRoute(
+        builder: (_) => FriendNotesPage(
+          friendUid: activity.ownerUid,
+          friendName: activity.userName,
+          bookId: activity.bookId,
+          bookTitle: activity.bookTitle,
+        ),
+      ));
+    } else {
+      // reading / completed / review → navigate to book
+      _openBook(ctx, activity);
+    }
   }
 
   // ── Search tab ───────────────────────────────────────────────────────────
@@ -269,6 +315,176 @@ class _FriendsPageState extends State<FriendsPage>
   }
 }
 
+// ── Activity card ─────────────────────────────────────────────────────────────
+
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.activity, required this.c, required this.onTap});
+  final FriendActivity activity;
+  final AppPalette c;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final diff = now.difference(activity.timestamp);
+    final timeAgo = diff.inDays > 0 ? '${diff.inDays}d ago'
+        : diff.inHours > 0 ? '${diff.inHours}h ago'
+        : diff.inMinutes > 0 ? '${diff.inMinutes}m ago'
+        : 'just now';
+
+    final type = activity.activityType;
+    final isNote = type == 'note';
+    final isQuote = type == 'quote';
+    final isReview = type == 'review';
+    final isCompleted = type == 'completed';
+
+    IconData typeIcon;
+    Color typeColor;
+    String actionText;
+
+    if (isQuote) {
+      typeIcon = Icons.format_quote_rounded;
+      typeColor = c.brand;
+      actionText = 'saved a quote from';
+    } else if (isNote) {
+      typeIcon = Icons.sticky_note_2_outlined;
+      typeColor = c.brand;
+      actionText = 'took a note on';
+    } else if (isReview) {
+      typeIcon = Icons.star_rounded;
+      typeColor = Colors.amber;
+      actionText = 'reviewed';
+    } else if (isCompleted) {
+      typeIcon = Icons.check_circle_rounded;
+      typeColor = Colors.green;
+      actionText = 'finished reading';
+    } else {
+      typeIcon = Icons.menu_book_rounded;
+      typeColor = c.brand;
+      actionText = 'is reading';
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── Header row ──────────────────────────────────────────────────
+          Row(children: [
+            // Avatar
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: c.brandSoft, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: Text(
+                activity.userName.isNotEmpty ? activity.userName[0].toUpperCase() : '?',
+                style: GoogleFonts.outfit(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: c.brand),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: RichText(text: TextSpan(
+                style: GoogleFonts.outfit(fontSize: 14, color: c.text),
+                children: [
+                  TextSpan(text: activity.userName,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  TextSpan(text: ' $actionText ',
+                      style: TextStyle(color: c.textMuted, fontWeight: FontWeight.w400)),
+                  TextSpan(text: activity.bookTitle,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: c.brand)),
+                ],
+              )),
+            ),
+            const SizedBox(width: 8),
+            Icon(typeIcon, color: typeColor, size: 18),
+          ]),
+
+          // ── Note / Quote body ────────────────────────────────────────────
+          if ((isNote || isQuote) && activity.noteText != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isQuote ? c.brandSoft : c.surfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isQuote ? c.brand.withOpacity(0.25) : c.border,
+                ),
+              ),
+              child: Text(
+                activity.noteText!,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: c.text,
+                  height: 1.5,
+                  fontStyle: isQuote ? FontStyle.italic : FontStyle.normal,
+                ),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+
+          // ── Review body ──────────────────────────────────────────────────
+          if (isReview) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              ...List.generate(5, (i) => Icon(
+                i < (activity.rating ?? 0) ? Icons.star_rounded : Icons.star_border_rounded,
+                size: 16,
+                color: Colors.amber,
+              )),
+              const SizedBox(width: 8),
+              Text('${activity.rating}/5',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: c.textMuted)),
+            ]),
+            if (activity.reviewText != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                activity.reviewText!,
+                style: GoogleFonts.outfit(fontSize: 13, color: c.text, height: 1.5),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+
+          // ── Footer ──────────────────────────────────────────────────────
+          const SizedBox(height: 10),
+          Row(children: [
+            Text(timeAgo,
+                style: GoogleFonts.outfit(fontSize: 11, color: c.textMuted)),
+            const Spacer(),
+            if (isNote || isQuote)
+              Row(children: [
+                Text('All notes',
+                    style: GoogleFonts.outfit(
+                        fontSize: 11, fontWeight: FontWeight.w600, color: c.brand)),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_forward_rounded, size: 12, color: c.brand),
+              ])
+            else
+              Row(children: [
+                Text('View book',
+                    style: GoogleFonts.outfit(
+                        fontSize: 11, fontWeight: FontWeight.w600, color: c.brand)),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_forward_rounded, size: 12, color: c.brand),
+              ]),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
 // ── Profile card ─────────────────────────────────────────────────────────────
 
 class _ProfileCard extends StatelessWidget {
@@ -288,22 +504,20 @@ class _ProfileCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar
           Container(
             width: 48, height: 48,
-            decoration: BoxDecoration(
-              color: c.brandSoft,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: c.brandSoft, shape: BoxShape.circle),
             alignment: Alignment.center,
             child: Text(profile.initials,
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: c.brand)),
+                style: GoogleFonts.outfit(
+                    fontSize: 16, fontWeight: FontWeight.w700, color: c.brand)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(profile.displayName,
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: c.text)),
+                  style: GoogleFonts.outfit(
+                      fontSize: 15, fontWeight: FontWeight.w600, color: c.text)),
               if (profile.currentBookTitle != null) ...[
                 const SizedBox(height: 2),
                 Row(children: [
@@ -346,75 +560,6 @@ class _ProfileCard extends StatelessWidget {
   }
 }
 
-// ── Activity card ─────────────────────────────────────────────────────────────
-
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.activity, required this.c});
-  final FriendActivity activity;
-  final AppPalette c;
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final diff = now.difference(activity.timestamp);
-    final timeAgo = diff.inDays > 0 ? '${diff.inDays}d ago'
-        : diff.inHours > 0 ? '${diff.inHours}h ago'
-        : '${diff.inMinutes}m ago';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: c.brandSoft, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text(
-              activity.userName.isNotEmpty ? activity.userName[0].toUpperCase() : '?',
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: c.brand),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              RichText(text: TextSpan(
-                style: GoogleFonts.outfit(fontSize: 14, color: c.text),
-                children: [
-                  TextSpan(text: activity.userName,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  TextSpan(
-                    text: activity.activityType == 'completed'
-                        ? ' finished reading '
-                        : ' is reading ',
-                    style: TextStyle(color: c.textMuted),
-                  ),
-                  TextSpan(text: activity.bookTitle,
-                      style: TextStyle(fontWeight: FontWeight.w600, color: c.brand)),
-                ],
-              )),
-              const SizedBox(height: 4),
-              Text(timeAgo, style: GoogleFonts.outfit(fontSize: 11, color: c.textMuted)),
-            ]),
-          ),
-          Icon(
-            activity.activityType == 'completed'
-                ? Icons.check_circle_rounded
-                : Icons.menu_book_rounded,
-            color: activity.activityType == 'completed' ? Colors.green : c.brand,
-            size: 18,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Empty following ───────────────────────────────────────────────────────────
 
 class _EmptyFollowing extends StatelessWidget {
@@ -430,7 +575,8 @@ class _EmptyFollowing extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 80, height: 80,
-            decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(
+                color: c.brandSoft, borderRadius: BorderRadius.circular(20)),
             child: Icon(Icons.people_alt_rounded, color: c.brand, size: 40),
           ),
           const SizedBox(height: 24),
@@ -447,9 +593,11 @@ class _EmptyFollowing extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: onFind,
             icon: const Icon(Icons.search_rounded, size: 18),
-            label: Text('Find people', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            label: Text('Find people',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: c.brand, foregroundColor: Colors.white,
+              backgroundColor: c.brand,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 0,
