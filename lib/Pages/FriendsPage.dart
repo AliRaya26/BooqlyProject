@@ -1,4 +1,4 @@
-import 'package:booqly/Pages/ReadingWrappedPage.dart';
+import 'package:booqly/services/dummy_data_service.dart';
 import 'package:booqly/services/social_service.dart';
 import 'package:booqly/theme/app_colors.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +26,8 @@ class _FriendsPageState extends State<FriendsPage>
 
   List<FriendActivity> _feed = [];
   bool _loadingFeed = true;
+
+  bool _seeding = false;
 
   @override
   void initState() {
@@ -88,12 +90,27 @@ class _FriendsPageState extends State<FriendsPage>
             fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.auto_awesome_rounded, color: c.brand),
-            tooltip: 'Reading Wrapped',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const ReadingWrappedPage())),
-          ),
+          // ── Temporary seed button ────────────────────────────────────────
+          _seeding
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: c.brand),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(Icons.science_outlined, color: c.textMuted),
+                  tooltip: 'Load dummy data',
+                  onPressed: () async {
+                    setState(() => _seeding = true);
+                    await DummyDataService().seed();
+                    // Sequential to avoid racing setState calls from both loaders.
+                    await _loadFollowing();
+                    await _loadFeed();
+                    if (mounted) setState(() => _seeding = false);
+                  },
+                ),
         ],
         bottom: TabBar(
           controller: _tabs,

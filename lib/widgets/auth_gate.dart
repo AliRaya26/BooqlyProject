@@ -34,7 +34,10 @@ class AuthGate extends StatelessWidget {
                   : const WelcomePage();
             }
 
-            AuthNavigationController.instance.clearLoginScreenRequest();
+            // Defer the ValueNotifier mutation so it doesn't fire during build.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              AuthNavigationController.instance.clearLoginScreenRequest();
+            });
             return _SignedInScreen(uid: user.uid);
           },
         );

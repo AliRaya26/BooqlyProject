@@ -41,20 +41,30 @@ class BookNotesPage extends StatelessWidget {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add_rounded, color: c.brand),
-            tooltip: 'Add note',
-            onPressed: () => _showAddSheet(context, book.id),
-          ),
-        ],
+        // No AppBar action — FAB is the single entry point
+
       ),
       body: StreamBuilder<List<BookNoteModel>>(
         stream: service.notesStream(book.id),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: c.brand));
+          }
+          if (snap.hasError) {
             return Center(
-                child: CircularProgressIndicator(color: c.brand));
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.error_outline_rounded, color: c.textMuted, size: 40),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Could not load notes.\n${snap.error}',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(fontSize: 13, color: c.textMuted),
+                  ),
+                ]),
+              ),
+            );
           }
           final notes = snap.data ?? [];
           if (notes.isEmpty) {
@@ -428,8 +438,18 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
         );
       }
       if (mounted) Navigator.pop(context);
-    } catch (_) {
-      if (mounted) setState(() => _saving = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save note: $e',
+                style: GoogleFonts.outfit()),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 

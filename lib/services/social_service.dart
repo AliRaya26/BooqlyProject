@@ -315,16 +315,19 @@ class SocialService {
     final yearEnd = Timestamp.fromDate(DateTime(year + 1));
 
     try {
-      // Books completed
+      // Books completed this year — query by status only, filter dates client-side
+      // (avoids composite index requirement)
       final completedSnap = await _db
           .collection('users')
           .doc(uid)
           .collection('library')
           .where('status', isEqualTo: 'completed')
-          .where('completedAt', isGreaterThanOrEqualTo: yearStart)
-          .where('completedAt', isLessThan: yearEnd)
           .get();
-      final booksCompleted = completedSnap.docs.length;
+      final booksCompleted = completedSnap.docs.where((doc) {
+        final ts = doc.data()['completedAt'];
+        if (ts == null || ts is! Timestamp) return false;
+        return ts.compareTo(yearStart) >= 0 && ts.compareTo(yearEnd) < 0;
+      }).length;
 
       // Reading sessions stats
       final sessionsSnap = await _db

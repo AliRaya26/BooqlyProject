@@ -49,16 +49,21 @@ class GoalsService {
     final yearStart = Timestamp.fromDate(DateTime(year, 1, 1));
     final yearEnd = Timestamp.fromDate(DateTime(year + 1, 1, 1));
 
+    // Query by status only (avoids composite index requirement),
+    // then filter completedAt client-side.
     final librarySnap = await _firestore
         .collection('users')
         .doc(_uid)
         .collection('library')
         .where('status', isEqualTo: 'completed')
-        .where('completedAt', isGreaterThanOrEqualTo: yearStart)
-        .where('completedAt', isLessThan: yearEnd)
         .get();
 
-    final booksCompletedThisYear = librarySnap.docs.length;
+    final booksCompletedThisYear = librarySnap.docs.where((doc) {
+      final data = doc.data();
+      final ts = data['completedAt'];
+      if (ts == null || ts is! Timestamp) return false;
+      return ts.compareTo(yearStart) >= 0 && ts.compareTo(yearEnd) < 0;
+    }).length;
 
     // ── Sum pages read today ──────────────────────────────────────────────────
     final todayStart = Timestamp.fromDate(DateTime(now.year, now.month, now.day));

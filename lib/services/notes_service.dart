@@ -21,16 +21,11 @@ class NotesService {
   }
 
   Stream<List<BookNoteModel>> notesStream(String bookId) {
-    try {
-      return _notesRef(bookId)
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map((snap) =>
-              snap.docs.map((d) => BookNoteModel.fromDoc(d)).toList());
-    } catch (e) {
-      debugPrint('NotesService.notesStream: $e');
-      return const Stream.empty();
-    }
+    if (_uid == null) return Stream.error('Not signed in');
+    return _notesRef(bookId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => BookNoteModel.fromDoc(d)).toList());
   }
 
   Future<void> addNote({
@@ -39,6 +34,21 @@ class NotesService {
     int? pageNumber,
     NoteType type = NoteType.note,
   }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not signed in');
+
+    // Ensure the library parent document exists so subcollection writes succeed
+    // even if the book hasn't been formally added to the library yet.
+    final libRef = _db
+        .collection('users')
+        .doc(uid)
+        .collection('library')
+        .doc(bookId);
+    final libSnap = await libRef.get();
+    if (!libSnap.exists) {
+      await libRef.set({'bookId': bookId}, SetOptions(merge: true));
+    }
+
     await _notesRef(bookId).add(
       BookNoteModel(
         id: '',

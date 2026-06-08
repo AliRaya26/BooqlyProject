@@ -127,10 +127,20 @@ class _GoalsPageState extends State<GoalsPage> {
 
           if (snapshot.hasError) {
             return Center(
-              child: Text(
-                'Something went wrong.\nTap to retry.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(color: c.textMuted),
+              child: GestureDetector(
+                onTap: _reload,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh_rounded, color: c.textMuted, size: 36),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Something went wrong.\nTap to retry.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(color: c.textMuted),
+                    ),
+                  ],
+                ),
               ),
             );
           }

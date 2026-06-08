@@ -1,3 +1,5 @@
+import 'package:booqly/Pages/GoalsPage.dart';
+import 'package:booqly/Pages/ReadingWrappedPage.dart';
 import 'package:booqly/theme/app_colors.dart';
 import 'package:booqly/theme/theme_service.dart';
 import 'package:booqly/widgets/auth_gate.dart';
@@ -420,6 +422,32 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 28),
                 ],
+
+                // ── My Reading Year ──────────────────────────────────────
+                _sectionLabel('My Reading Year', c),
+                const SizedBox(height: 10),
+                _SettingsTileC(
+                  icon: Icons.flag_rounded,
+                  title: 'Reading Goals',
+                  subtitle: 'Set your yearly and daily reading targets',
+                  palette: c,
+                  trailing: Icon(Icons.chevron_right_rounded,
+                      color: c.brand.withValues(alpha: 0.9)),
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const GoalsPage())),
+                ),
+                const SizedBox(height: 10),
+                _SettingsTileC(
+                  icon: Icons.auto_awesome_rounded,
+                  title: 'Reading Wrapped ${DateTime.now().year}',
+                  subtitle: 'Your year in books — stats, highlights & more',
+                  palette: c,
+                  trailing: Icon(Icons.chevron_right_rounded,
+                      color: c.brand.withValues(alpha: 0.9)),
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const ReadingWrappedPage())),
+                ),
+                const SizedBox(height: 28),
 
                 // ── Appearance (dark mode — first thing users look for) ──
                 _sectionLabel('Appearance', c),
