@@ -3,13 +3,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helper ────────────────────────────────────────────────────────────────
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Books (read-only for signed-in users) ─────────────────────────────────
     match /books/{bookId} {
       allow read: if request.auth != null;
       allow write: if false;
 
       match /feedbacks/{feedbackId} {
         allow read: if request.auth != null;
-        // Demo seed docs only (fb_1 … fb_5), written once per book by the app.
         allow create: if request.auth != null
           && feedbackId.matches('^fb_[1-5]$')
           && request.resource.data.bookId == bookId
@@ -27,32 +32,67 @@ service cloud.firestore {
       }
     }
 
+    // ── App config (read-only) ────────────────────────────────────────────────
     match /app_config/{docId} {
       allow read: if request.auth != null;
       allow write: if false;
     }
 
-    // One document per user: preferences/{userId}
+    // ── User preferences ──────────────────────────────────────────────────────
     match /preferences/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
     }
 
+    // ── Users ─────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Owner: full access. Others: read public profile fields (Friends search).
+      allow read: if request.auth != null;
+      allow write: if isOwner(userId);
 
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+      // ── Library ──────────────────────────────────────────────────────────
+      match /library/{bookId} {
+        allow read, write: if isOwner(userId);
+
+        // Notes & Highlights — private to owner
+        match /notes/{noteId} {
+          allow read, write: if isOwner(userId);
+        }
+      }
+
+      // ── Reading Sessions ──────────────────────────────────────────────────
+      match /readingSessions/{sessionId} {
+        // Owner writes; followed users' sessions are read via Cloud Functions
+        // or directly when building the activity feed (same-user read pattern).
+        allow read: if request.auth != null;
+        allow write: if isOwner(userId);
+      }
+
+      // ── Reading Goals ─────────────────────────────────────────────────────
+      match /goals/{year} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Reading Preferences ───────────────────────────────────────────────
+      match /reading_preferences/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Following list ────────────────────────────────────────────────────
+      // Owner manages; any signed-in user can read (for activity feed queries).
+      match /following/{targetId} {
+        allow read: if request.auth != null;
+        allow write: if isOwner(userId);
       }
     }
 
-    // Used before sign-up / sign-in to detect registered emails (no passwords stored).
+    // ── Email index (pre-signup check) ────────────────────────────────────────
     match /email_index/{email} {
       allow read: if true;
       allow create: if request.auth != null;
       allow update, delete: if false;
     }
 
-    // Outbound mail queue for Firebase "Trigger Email" extension (signup on web).
+    // ── Outbound mail queue ───────────────────────────────────────────────────
     match /mail/{docId} {
       allow read: if false;
       allow create: if request.resource.data.keys().hasOnly(['to', 'message'])
