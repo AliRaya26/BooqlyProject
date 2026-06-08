@@ -173,9 +173,20 @@ class GeminiChatService {
         final libraryData = doc.data();
         final bookDoc =
             await _firestore.collection('books').doc(doc.id).get();
-        if (!bookDoc.exists) continue;
 
-        final book = BookModel.fromMap(bookDoc.data()!, bookDoc.id);
+        // Catalog book if it exists; otherwise use library-stored metadata
+        // (covers ISBN-scanned or manually added books not in the catalog)
+        final srcData = bookDoc.exists ? bookDoc.data()! : libraryData;
+        final book = BookModel(
+          id: doc.id,
+          title: srcData['title'] as String? ?? '',
+          author: srcData['author'] as String? ?? '',
+          description: srcData['description'] as String? ?? '',
+          category: srcData['category'] as String? ?? 'Other',
+          coverUrl: srcData['coverUrl'] as String? ?? '',
+          pdfUrl: srcData['pdfUrl'] as String? ?? '',
+          totalPages: (srcData['totalPages'] as num?)?.toInt() ?? 0,
+        );
         libraryBooks.add(
           LibraryBookEntry(
             book: book,
@@ -463,7 +474,7 @@ class GeminiChatService {
 
     // Check if all failures were quota-related
     final isAllQuota = lastError is GeminiApiException &&
-        (lastError as GeminiApiException).isQuotaExceeded;
+        lastError.isQuotaExceeded;
     throw GeminiApiException(
       isAllQuota
           ? 'You\'ve used up the free quota for today. It resets at midnight (Pacific Time). Try again tomorrow or wait a few minutes — limits reset hourly on the free tier.'

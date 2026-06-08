@@ -769,3 +769,79 @@ exports.sendReadingNudges = onSchedule(
     );
   },
 );
+
+// ── notifyNewFollower ──────────────────────────────────────────────────────────
+// Called from the Flutter app whenever a user follows someone.
+// Sends a push notification to the followed user's FCM token.
+exports.notifyNewFollower = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "You must be signed in.");
+    }
+
+    const followedUid = request.data?.followedUid;
+    if (!followedUid || typeof followedUid !== "string") {
+      throw new HttpsError("invalid-argument", "followedUid is required.");
+    }
+
+    const followerUid = request.auth.uid;
+    if (followerUid === followedUid) return { sent: false };
+
+    const db = admin.firestore();
+
+    const [followerSnap, followedSnap] = await Promise.all([
+      db.collection("users").doc(followerUid).get(),
+      db.collection("users").doc(followedUid).get(),
+    ]);
+
+    if (!followerSnap.exists || !followedSnap.exists) {
+      return { sent: false, reason: "user_not_found" };
+    }
+
+    const followerData = followerSnap.data();
+    const firstName = (followerData.firstName || "").trim();
+    const lastName  = (followerData.lastName  || "").trim();
+    const followerName = [firstName, lastName].filter(Boolean).join(" ") || "Someone";
+
+    const fcmToken = followedSnap.data()?.fcmToken;
+    if (!fcmToken) return { sent: false, reason: "no_fcm_token" };
+
+    try {
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: {
+          title: "New follower on Booqly 📚",
+          body: `${followerName} started following you!`,
+        },
+        android: {
+          notification: {
+            icon: "ic_launcher",
+            color: "#D4A96A",
+            channelId: "booqly_reading_motivation",
+          },
+        },
+        data: {
+          type: "new_follower",
+          followerUid,
+          followerName,
+        },
+      });
+      console.log(`notifyNewFollower: sent to ${followedUid} from ${followerUid}`);
+      return { sent: true };
+    } catch (err) {
+      // Token stale — clean it up so we don't keep trying
+      if (
+        err.code === "messaging/registration-token-not-registered" ||
+        err.code === "messaging/invalid-registration-token"
+      ) {
+        await db
+          .collection("users")
+          .doc(followedUid)
+          .update({ fcmToken: admin.firestore.FieldValue.delete() });
+      }
+      console.warn(`notifyNewFollower: FCM send failed: ${err.message}`);
+      return { sent: false, error: err.message };
+    }
+  },
+);

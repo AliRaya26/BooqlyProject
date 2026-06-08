@@ -22,6 +22,7 @@ import 'package:booqly/models/book_model.dart';
 import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:booqly/services/feedback_seed_service.dart';
 import 'package:booqly/Pages/ManualEntryPage.dart';
+import 'package:booqly/Pages/IsbnScanPage.dart';
 import 'dart:async';
 
 // ─── Book cover widget ────────────────────────────────────────────────────────
@@ -212,29 +213,21 @@ class _HomePageState extends State<HomePage> {
                 .doc(bookId)
                 .get();
 
-            if (!bookDoc.exists) {
-              if (mounted) {
-                setState(() {
-                  continueBook = null;
-                  isLoadingContinue = false;
-                });
-              }
-              return;
-            }
-
-            final bookData = bookDoc.data()!;
+            // Use catalog data if available; fall back to library-stored data
+            // (e.g. books added via ISBN scan that aren't in the catalog)
+            final srcData = bookDoc.exists ? bookDoc.data()! : libraryData;
 
             if (mounted) {
               setState(() {
                 continueBook = BookModel(
-                  id: bookDoc.id,
-                  title: bookData['title'] ?? '',
-                  author: bookData['author'] ?? '',
-                  description: bookData['description'] ?? '',
-                  category: bookData['category'] ?? '',
-                  coverUrl: bookData['coverUrl'] ?? '',
-                  pdfUrl: bookData['pdfUrl'] ?? '',
-                  totalPages: bookData['totalPages'] ?? 0,
+                  id: bookId,
+                  title: srcData['title'] ?? '',
+                  author: srcData['author'] ?? '',
+                  description: srcData['description'] ?? '',
+                  category: srcData['category'] ?? '',
+                  coverUrl: srcData['coverUrl'] ?? '',
+                  pdfUrl: srcData['pdfUrl'] ?? '',
+                  totalPages: (srcData['totalPages'] as num?)?.toInt() ?? 0,
                   progress: (libraryData['progress'] ?? 0).toDouble(),
                   currentPage: libraryData['currentPage'] ?? 0,
                 );
@@ -362,19 +355,18 @@ class _HomePageState extends State<HomePage> {
                 .doc(bookId)
                 .get();
 
-            if (!bookDoc.exists) return null;
-
-            final bookData = bookDoc.data()!;
+            // Use catalog data if present; fall back to library-stored metadata
+            final srcData = bookDoc.exists ? bookDoc.data()! : libraryData;
 
             return BookModel(
-              id: bookDoc.id,
-              title: bookData['title'] ?? '',
-              author: bookData['author'] ?? '',
-              description: bookData['description'] ?? '',
-              category: bookData['category'] ?? '',
-              coverUrl: bookData['coverUrl'] ?? '',
-              pdfUrl: bookData['pdfUrl'] ?? '',
-              totalPages: bookData['totalPages'] ?? 0,
+              id: bookId,
+              title: srcData['title'] ?? '',
+              author: srcData['author'] ?? '',
+              description: srcData['description'] ?? '',
+              category: srcData['category'] ?? '',
+              coverUrl: srcData['coverUrl'] ?? '',
+              pdfUrl: srcData['pdfUrl'] ?? '',
+              totalPages: (srcData['totalPages'] as num?)?.toInt() ?? 0,
               progress: (libraryData['progress'] ?? 0).toDouble().clamp(0.0, 1.0),
               currentPage: libraryData['currentPage'] ?? 0,
             );
@@ -434,6 +426,8 @@ class _HomePageState extends State<HomePage> {
       case 3:
         return const FriendsPage();
       case 4:
+        return const BookChatPage(embeddedInTab: true);
+      case 5:
         return const SettingsPage(embeddedInTab: true);
       default:
         return const SizedBox.shrink();
@@ -517,15 +511,8 @@ void _showAddBottomSheet(BuildContext context) {
                 icon: Icons.qr_code_scanner_rounded,
                 label: 'Scan ISBN barcode', onTap: () {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                backgroundColor: cc.surface,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                content: Text('ISBN scanning coming soon',
-                    style: GoogleFonts.outfit(color: cc.text)),
-                duration: const Duration(seconds: 2),
-              ));
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const IsbnScanPage()));
             }),
             _addTile(ctx, icon: Icons.edit_rounded, label: 'Manual entry',
                 onTap: () {
@@ -581,35 +568,19 @@ class _TopBar extends StatelessWidget {
             Text('Keep reading',
                 style: GoogleFonts.outfit(fontSize: 13, color: c.textSub)),
           ]),
-          Row(children: [
-            GestureDetector(
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => const BookChatPage())),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                    color: c.surface,
-                    shape: BoxShape.circle,
-                    boxShadow: cardShadow(context)),
-                child: Icon(Icons.smart_toy_outlined, color: c.brand, size: 20),
-              ),
+          GestureDetector(
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                  color: c.surface,
+                  shape: BoxShape.circle,
+                  boxShadow: cardShadow(context)),
+              child: Icon(Icons.settings_outlined, color: c.textSub, size: 20),
             ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                    color: c.surface,
-                    shape: BoxShape.circle,
-                    boxShadow: cardShadow(context)),
-                child: Icon(Icons.settings_outlined, color: c.textSub, size: 20),
-              ),
-            ),
-          ]),
+          ),
         ],
       ),
     );
@@ -1775,11 +1746,12 @@ class _BottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavItem(icon: Icons.home_rounded,         label: 'Home',     index: 0, selected: selectedIndex, onTap: onTap),
-          _NavItem(icon: Icons.explore_rounded,      label: 'Discover', index: 1, selected: selectedIndex, onTap: onTap),
-          _NavItem(icon: Icons.library_books_rounded,label: 'Library',  index: 2, selected: selectedIndex, onTap: onTap),
-          _NavItem(icon: Icons.people_alt_rounded,   label: 'Friends',  index: 3, selected: selectedIndex, onTap: onTap),
-          _NavItem(icon: Icons.person_rounded,       label: 'Profile',  index: 4, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.home_rounded,           label: 'Home',     index: 0, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.explore_rounded,        label: 'Discover', index: 1, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.library_books_rounded,  label: 'Library',  index: 2, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.people_alt_rounded,     label: 'Friends',  index: 3, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.auto_stories_rounded,   label: 'AI Chat',  index: 4, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.person_rounded,         label: 'Profile',  index: 5, selected: selectedIndex, onTap: onTap),
         ],
       ),
     );

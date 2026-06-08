@@ -486,14 +486,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   onUnlink: _linking ? null : _unlinkCalendar,
                   palette: c,
                 ),
-                if (!_hasOAuthConfig || (!_calendarLinked)) ...[
-                  const SizedBox(height: 12),
-                  _CalendarSetupCard(
-                    origin: _calendarService.webOrigin,
-                    errorMessage: GoogleOAuthConfig.mismatchMessage,
-                    palette: c,
-                  ),
-                ],
                 const SizedBox(height: 20),
                 _SettingsTileC(
                   icon: Icons.notifications_active_outlined,

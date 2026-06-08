@@ -10,7 +10,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 class BookChatPage extends StatefulWidget {
-  const BookChatPage({super.key});
+  const BookChatPage({super.key, this.embeddedInTab = false});
+
+  /// When true the page is shown inside the main bottom-nav scaffold,
+  /// so we suppress the AppBar back-button and remove bottom padding for
+  /// the system nav bar (the parent scaffold already handles it).
+  final bool embeddedInTab;
 
   @override
   State<BookChatPage> createState() => _BookChatPageState();
@@ -91,28 +96,99 @@ class _BookChatPageState extends State<BookChatPage> {
     return 'Hi! I\'m here to help you choose what to read and share feedback on books.\n\n'
         '• Ask what to read next\n'
         '• Ask for thoughts on any book by name\n'
-        '• Tap the photo icon to send a picture of a physical book\n\n'
+        '• 📷 Tap the photo button to snap or upload a book cover — I\'ll identify it and share my thoughts\n\n'
         '${catalogCount > 0 ? "I can suggest from $catalogCount books in Booqly." : "Add books to Booqly to get tailored picks."}';
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _showImageSourceSheet() async {
+    final c = AppColors.of(context);
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final cc = AppColors.of(ctx);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    decoration: BoxDecoration(
+                      color: cc.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Add a book photo',
+                  style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: cc.text),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The AI will identify the book and give you feedback',
+                  style: GoogleFonts.outfit(fontSize: 13, color: cc.textMuted),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                _ImageSourceTile(
+                  icon: Icons.camera_alt_rounded,
+                  label: 'Take a photo',
+                  sub: 'Open camera and snap the book cover',
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                  c: cc,
+                ),
+                const SizedBox(height: 10),
+                _ImageSourceTile(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Choose from gallery',
+                  sub: 'Pick an existing photo from your device',
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                  c: cc,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (source == null) return;
+    await _pickImageFrom(source);
+  }
+
+  Future<void> _pickImageFrom(ImageSource source) async {
     try {
       final file = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1200,
-        imageQuality: 85,
+        source: source,
+        maxWidth: 1400,
+        imageQuality: 88,
       );
       if (file == null) return;
       final bytes = await file.readAsBytes();
       final mime = _mimeFromPath(file.mimeType, file.name);
+      if (!mounted) return;
       setState(() {
         _pendingImageBytes = bytes;
         _pendingImageMime = mime;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not load image: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not load image: $e',
+            style: GoogleFonts.outfit()),
+        backgroundColor: AppColors.of(context).red,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -222,17 +298,21 @@ class _BookChatPageState extends State<BookChatPage> {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
+    final embedded = widget.embeddedInTab;
     return Scaffold(
       backgroundColor: c.bg,
       appBar: AppBar(
         backgroundColor: c.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: c.text),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
+        automaticallyImplyLeading: false,
+        leading: embedded
+            ? null
+            : IconButton(
+                icon: Icon(Icons.arrow_back_rounded, color: c.text),
+                onPressed: () => Navigator.pop(context),
+              ),
+        titleSpacing: embedded ? 16 : 0,
         title: Row(
           children: [
             Container(
@@ -329,9 +409,14 @@ class _BookChatPageState extends State<BookChatPage> {
   }
 
   Widget _buildInputBar(AppPalette c) {
+    final embedded = widget.embeddedInTab;
+    // When embedded, the BottomNav overlay is 72 + systemBottomPad tall —
+    // add that as clearance so the input is never hidden behind the nav bar.
+    final bottomExtra = embedded
+        ? 72.0 + MediaQuery.of(context).padding.bottom
+        : MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          12, 10, 12, 10 + MediaQuery.of(context).padding.bottom),
+      padding: EdgeInsets.fromLTRB(12, 10, 12, 10 + bottomExtra),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border(top: BorderSide(color: c.border)),
@@ -341,27 +426,46 @@ class _BookChatPageState extends State<BookChatPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_pendingImageBytes != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: c.brandSoft,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: c.brandMid),
+              ),
               child: Row(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     child: Image.memory(_pendingImageBytes!,
-                        width: 56, height: 72, fit: BoxFit.cover),
+                        width: 52, height: 66, fit: BoxFit.cover),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text('Book photo — add a question or tap send',
-                        style:
-                            GoogleFonts.outfit(fontSize: 12, color: c.textSub)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Book photo attached',
+                            style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: c.brand)),
+                        const SizedBox(height: 2),
+                        Text('Type a question or tap send to identify',
+                            style: GoogleFonts.outfit(
+                                fontSize: 11, color: c.textSub)),
+                      ],
+                    ),
                   ),
                   IconButton(
                     onPressed: () => setState(() {
                       _pendingImageBytes = null;
                       _pendingImageMime = null;
                     }),
-                    icon: Icon(Icons.close, color: c.textMuted),
+                    icon: Icon(Icons.close_rounded, color: c.brand, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
@@ -370,9 +474,14 @@ class _BookChatPageState extends State<BookChatPage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               IconButton(
-                onPressed: _sending ? null : _pickImage,
-                icon: Icon(Icons.photo_camera_outlined, color: c.brand),
-                tooltip: 'Photo of a book',
+                onPressed: _sending ? null : _showImageSourceSheet,
+                icon: Icon(
+                  _pendingImageBytes != null
+                      ? Icons.photo_camera_rounded
+                      : Icons.add_photo_alternate_outlined,
+                  color: _pendingImageBytes != null ? c.brand : c.brand,
+                ),
+                tooltip: 'Attach book photo',
               ),
               Expanded(
                 child: TextField(
@@ -382,7 +491,7 @@ class _BookChatPageState extends State<BookChatPage> {
                   minLines: 1,
                   style: GoogleFonts.outfit(fontSize: 14, color: c.text),
                   decoration: InputDecoration(
-                    hintText: 'Ask what to read or about a book…',
+                    hintText: 'Ask about a book, or attach a photo…',
                     hintStyle:
                         GoogleFonts.outfit(fontSize: 14, color: c.textMuted),
                     filled: true,
@@ -670,6 +779,70 @@ class _ErrorState extends StatelessWidget {
                 Text('Try again', style: GoogleFonts.outfit(color: c.brand)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Image source picker tile ──────────────────────────────────────────────────
+
+class _ImageSourceTile extends StatelessWidget {
+  const _ImageSourceTile({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.onTap,
+    required this.c,
+  });
+
+  final IconData icon;
+  final String label;
+  final String sub;
+  final VoidCallback onTap;
+  final AppPalette c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: c.brandSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: c.brand, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: c.text)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: GoogleFonts.outfit(
+                          fontSize: 12, color: c.textMuted)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: c.textMuted, size: 14),
+          ],
+        ),
       ),
     );
   }

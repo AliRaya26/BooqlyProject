@@ -1,4 +1,6 @@
+import 'package:booqly/models/book_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -45,6 +47,7 @@ class FriendActivity {
   final String? noteText;    // note/quote text
   final int? rating;         // review star rating
   final String? reviewText;  // review comment
+  final String postId;       // unique ID used for storing likes
 
   const FriendActivity({
     required this.ownerUid,
@@ -57,6 +60,7 @@ class FriendActivity {
     this.noteText,
     this.rating,
     this.reviewText,
+    required this.postId,
   });
 }
 
@@ -77,6 +81,15 @@ class SocialService {
         .collection('following')
         .doc(targetUid)
         .set({'followedAt': FieldValue.serverTimestamp()});
+
+    // Fire-and-forget push notification — don't block the follow action
+    FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('notifyNewFollower')
+        .call({'followedUid': targetUid})
+        .then((_) {})
+        .catchError((Object e) {
+      debugPrint('SocialService.follow: notification failed: $e');
+    });
   }
 
   Future<void> unfollow(String targetUid) async {
@@ -273,6 +286,7 @@ class SocialService {
               bookId: sd['bookId'] as String? ?? '',
               activityType: 'reading',
               timestamp: (sd['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              postId: '${targetUid}_rd_${s.id}',
             ));
           }
         } catch (_) {}
@@ -315,6 +329,7 @@ class SocialService {
                 activityType: nd['type'] == 'quote' ? 'quote' : 'note',
                 timestamp: noteTs,
                 noteText: nd['text'] as String?,
+                postId: '${targetUid}_n_${n.id}',
               ));
             }
           }
@@ -343,6 +358,7 @@ class SocialService {
               timestamp: reviewTs,
               rating: (rd['rating'] as num?)?.toInt(),
               reviewText: rd['comment'] as String?,
+              postId: '${targetUid}_r_${r.id}',
             ));
           }
         } catch (_) {}
@@ -387,6 +403,141 @@ class SocialService {
       return {'id': doc.id, ...doc.data()!};
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Returns a [BookModel] for an activity item.
+  /// Tries the catalog first; falls back to the friend's library doc so that
+  /// ISBN-added and dummy books can still be navigated to.
+  Future<BookModel?> getBookModelForActivity(FriendActivity activity) async {
+    // 1. Catalog
+    final data = await getBookData(activity.bookId);
+    if (data != null) return BookModel.fromMap(data, activity.bookId);
+
+    // 2. Friend's library doc (ISBN books, dummy books, etc.)
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(activity.ownerUid)
+          .collection('library')
+          .doc(activity.bookId)
+          .get();
+      if (doc.exists) {
+        final d = doc.data()!;
+        return BookModel(
+          id: activity.bookId,
+          title: d['title'] as String? ?? activity.bookTitle,
+          author: d['author'] as String? ?? '',
+          description: d['description'] as String? ?? '',
+          category: d['category'] as String? ?? 'Other',
+          coverUrl: d['coverUrl'] as String? ?? '',
+          pdfUrl: '',
+          totalPages: (d['totalPages'] as num?)?.toInt() ?? 0,
+        );
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  /// Fetches the [limit] most recent notes/quotes for [targetUid] across
+  /// all their books (used in the Following tab to show inline content).
+  Future<List<Map<String, dynamic>>> getRecentNotesForUser(
+    String targetUid, {
+    int limit = 4,
+  }) async {
+    try {
+      // Get their recently active library books
+      final librarySnap = await _db
+          .collection('users')
+          .doc(targetUid)
+          .collection('library')
+          .orderBy('lastReadAt', descending: true)
+          .limit(8)
+          .get();
+
+      final all = <Map<String, dynamic>>[];
+
+      for (final libDoc in librarySnap.docs) {
+        if (all.length >= limit * 2) break; // enough to sort from
+        final ld = libDoc.data();
+        final bookId = libDoc.id;
+        final bookTitle = ld['title'] as String? ?? '';
+        final coverUrl = ld['coverUrl'] as String? ?? '';
+
+        try {
+          final notesSnap = await _db
+              .collection('users')
+              .doc(targetUid)
+              .collection('library')
+              .doc(bookId)
+              .collection('notes')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .get();
+
+          for (final n in notesSnap.docs) {
+            all.add({
+              ...n.data(),
+              'bookId': bookId,
+              'bookTitle': bookTitle,
+              'coverUrl': coverUrl,
+              'ownerUid': targetUid,
+            });
+          }
+        } catch (_) {}
+      }
+
+      // Sort by createdAt descending and take top [limit]
+      all.sort((a, b) {
+        final at = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final bt = (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        return bt.compareTo(at);
+      });
+
+      return all.take(limit).toList();
+    } catch (e) {
+      debugPrint('SocialService.getRecentNotesForUser: $e');
+      return [];
+    }
+  }
+
+  // ── Post likes ────────────────────────────────────────────────────────────
+
+  Future<void> likePost(String postId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('likedPosts')
+        .doc(postId)
+        .set({'likedAt': FieldValue.serverTimestamp()});
+  }
+
+  Future<void> unlikePost(String postId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('likedPosts')
+        .doc(postId)
+        .delete();
+  }
+
+  Future<Set<String>> getLikedPostIds() async {
+    final uid = _uid;
+    if (uid == null) return {};
+    try {
+      final snap = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('likedPosts')
+          .get();
+      return snap.docs.map((d) => d.id).toSet();
+    } catch (_) {
+      return {};
     }
   }
 

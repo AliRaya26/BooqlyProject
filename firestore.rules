@@ -51,7 +51,8 @@ service cloud.firestore {
 
       // ── Library ──────────────────────────────────────────────────────────
       match /library/{bookId} {
-        allow read, write: if isOwner(userId);
+        allow read: if request.auth != null;   // friends can see your shelf
+        allow write: if isOwner(userId);
 
         // Notes & Quotes — owner writes; any signed-in user reads (social feed)
         match /notes/{noteId} {
@@ -80,6 +81,11 @@ service cloud.firestore {
       match /following/{targetId} {
         allow read: if request.auth != null;
         allow write: if isOwner(userId);
+      }
+
+      // ── Liked posts ───────────────────────────────────────────────────────
+      match /likedPosts/{postId} {
+        allow read, write: if isOwner(userId);
       }
 
       // ── Reviews (social feed) — owner writes; any signed-in user reads ─────
