@@ -120,44 +120,23 @@ class SocialService {
           .doc(uid)
           .collection('following')
           .get();
-      final followingSet =
-          followingSnap.docs.map((d) => d.id).toSet();
+      final followingSet = followingSnap.docs.map((d) => d.id).toSet();
 
-      // Search by firstName (case-insensitive prefix via range query)
-      final snap = await _db
-          .collection('users')
-          .orderBy('firstName')
-          .startAt([q[0].toUpperCase() + q.substring(1)])
-          .endAt([q[0].toUpperCase() + q.substring(1) + ''])
-          .limit(20)
-          .get();
+      // Fetch all users and filter client-side for case-insensitive matching.
+      // The old startAt/endAt range query had a bug (endAt == startAt because
+      // '' appended = same string), so it returned nothing.
+      final snap = await _db.collection('users').limit(200).get();
 
       final results = <PublicUserProfile>[];
       for (final doc in snap.docs) {
         if (doc.id == uid) continue; // exclude self
         final data = doc.data();
         final first = (data['firstName'] as String? ?? '').toLowerCase();
-        final last = (data['lastName'] as String? ?? '').toLowerCase();
-        final email = (data['email'] as String? ?? '').toLowerCase();
-        if (!first.contains(q) && !last.contains(q) && !email.contains(q)) {
-          continue;
-        }
+        final last  = (data['lastName']  as String? ?? '').toLowerCase();
+        final email = (data['email']     as String? ?? '').toLowerCase();
+        if (!'$first $last'.contains(q) && !email.contains(q)) continue;
         results.add(await _buildProfile(doc.id, data, followingSet));
-      }
-
-      // Also try email exact match
-      if (query.contains('@')) {
-        final emailSnap = await _db
-            .collection('users')
-            .where('email', isEqualTo: query.trim().toLowerCase())
-            .limit(5)
-            .get();
-        for (final doc in emailSnap.docs) {
-          if (doc.id == uid) continue;
-          if (results.any((r) => r.uid == doc.id)) continue;
-          results.add(
-              await _buildProfile(doc.id, doc.data(), followingSet));
-        }
+        if (results.length >= 20) break;
       }
 
       return results;
@@ -189,7 +168,6 @@ class SocialService {
           .get();
       if (librarySnap.docs.isNotEmpty) {
         final ld = librarySnap.docs.first.data();
-        // We need the book title — stored in library or we skip
         currentBookTitle = ld['title'] as String?;
         currentBookCover = ld['coverUrl'] as String?;
       }
@@ -234,11 +212,9 @@ class SocialService {
 
       final profiles = <PublicUserProfile>[];
       for (final targetUid in uids) {
-        final doc =
-            await _db.collection('users').doc(targetUid).get();
+        final doc = await _db.collection('users').doc(targetUid).get();
         if (!doc.exists) continue;
-        profiles.add(
-            await _buildProfile(targetUid, doc.data()!, followingSet));
+        profiles.add(await _buildProfile(targetUid, doc.data()!, followingSet));
       }
       return profiles;
     } catch (e) {
@@ -265,21 +241,18 @@ class SocialService {
       final since = DateTime.now().subtract(const Duration(days: 7));
 
       for (final targetUid in uids.take(10)) {
-        final userDoc =
-            await _db.collection('users').doc(targetUid).get();
+        final userDoc = await _db.collection('users').doc(targetUid).get();
         if (!userDoc.exists) continue;
         final uData = userDoc.data()!;
         final name =
-            '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'
-                .trim();
+            '${uData['firstName'] ?? ''} ${uData['lastName'] ?? ''}'.trim();
 
         // Recent reading sessions
         final sessionSnap = await _db
             .collection('users')
             .doc(targetUid)
             .collection('readingSessions')
-            .where('date',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
             .orderBy('date', descending: true)
             .limit(3)
             .get();
@@ -291,8 +264,7 @@ class SocialService {
             userName: name,
             bookTitle: sd['bookTitle'] as String? ?? 'a book',
             activityType: 'reading',
-            timestamp:
-                (sd['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            timestamp: (sd['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
           ));
         }
       }

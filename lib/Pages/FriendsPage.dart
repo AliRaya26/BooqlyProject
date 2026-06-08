@@ -33,7 +33,7 @@ class _FriendsPageState extends State<FriendsPage>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
-    _loadFollowing();
+    _loadFollowingAndAutoSeed();
     _loadFeed();
   }
 
@@ -42,6 +42,25 @@ class _FriendsPageState extends State<FriendsPage>
     _tabs.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  /// Loads following list and auto-seeds dummy data on first open if empty.
+  Future<void> _loadFollowingAndAutoSeed() async {
+    setState(() => _loadingFollowing = true);
+    final profiles = await _service.getFollowingProfiles();
+    if (!mounted) return;
+
+    if (profiles.isEmpty) {
+      // Auto-seed dummy friends so the page isn't blank on first open.
+      setState(() => _seeding = true);
+      await DummyDataService().seed();
+      final seeded = await _service.getFollowingProfiles();
+      if (mounted) setState(() { _following = seeded; _loadingFollowing = false; _seeding = false; });
+      // Also refresh the feed now that we have friends.
+      await _loadFeed();
+    } else {
+      if (mounted) setState(() { _following = profiles; _loadingFollowing = false; });
+    }
   }
 
   Future<void> _loadFollowing() async {
