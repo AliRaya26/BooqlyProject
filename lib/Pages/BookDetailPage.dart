@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/library_service.dart';
+import 'package:booqly/Pages/BookNotesPage.dart';
+import 'package:booqly/services/reading_session_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -739,61 +741,156 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
                       const SizedBox(height: 32),
 
-                      // Start / Continue Reading
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user == null) return;
+                      // Start / Continue Reading + Session Timer
+                      ValueListenableBuilder<ActiveSession?>(
+                        valueListenable: ReadingSessionService.instance.active,
+                        builder: (ctx, session, _) {
+                          final c = AppColors.of(ctx);
+                          final isThisBook = session?.bookId == widget.book.id;
+                          final isOtherBook =
+                              session != null && !isThisBook;
 
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user.uid)
-                                .collection('library')
-                                .doc(widget.book.id)
-                                .set({
-                                  "status": "reading",
-                                  "progress": _currentPage / widget.book.totalPages,
-                                  "currentPage": _currentPage,
-                                  "totalPages": widget.book.totalPages,
-                                  "addedAt": Timestamp.now(),
-                                }, SetOptions(merge: true));
-
-                            if (!context.mounted) return;
-                            setState(() => _bookStatus = "reading");
-
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PdfReaderPage(book: widget.book),
+                          return Column(
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: isOtherBook
+                                      ? null
+                                      : () async {
+                                          if (isThisBook) {
+                                            await showStopSessionSheet(ctx);
+                                            return;
+                                          }
+                                          // Mark reading in library
+                                          final user = FirebaseAuth
+                                              .instance.currentUser;
+                                          if (user == null) return;
+                                          await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(user.uid)
+                                              .collection('library')
+                                              .doc(widget.book.id)
+                                              .set({
+                                            "status": "reading",
+                                            "progress": _currentPage /
+                                                widget.book.totalPages,
+                                            "currentPage": _currentPage,
+                                            "totalPages":
+                                                widget.book.totalPages,
+                                            "addedAt": Timestamp.now(),
+                                          }, SetOptions(merge: true));
+                                          if (!ctx.mounted) return;
+                                          setState(
+                                              () => _bookStatus = "reading");
+                                          // Start session timer
+                                          ReadingSessionService.instance
+                                              .start(
+                                            bookId: widget.book.id,
+                                            bookTitle: widget.book.title,
+                                            coverUrl:
+                                                widget.book.coverUrl,
+                                            currentPage: _currentPage,
+                                            totalPages:
+                                                widget.book.totalPages,
+                                          );
+                                          // Open PDF reader
+                                          await Navigator.push(
+                                            ctx,
+                                            MaterialPageRoute(
+                                              builder: (_) => PdfReaderPage(
+                                                  book: widget.book),
+                                            ),
+                                          );
+                                          await loadBookStatus();
+                                          await loadProgress();
+                                          if (mounted) setState(() {});
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isThisBook
+                                        ? Colors.red.shade700
+                                        : c.brand,
+                                    disabledBackgroundColor:
+                                        c.border,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 18),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: isThisBook
+                                      ? Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                                Icons.stop_rounded,
+                                                color: Colors.white,
+                                                size: 20),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Stop · ${session!.elapsedLabel}',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                                fontFeatures: const [
+                                                  FontFeature.tabularFigures()
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Text(
+                                          _bookStatus == "reading"
+                                              ? 'Continue Reading'
+                                              : 'Start Reading',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                ),
                               ),
-                            );
-
-                            await loadBookStatus();
-                            await loadProgress();
-                            if (mounted) setState(() {});
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brand,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: Text(
-                            _bookStatus == "reading" ? 'Continue Reading' : 'Start Reading',
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                              if (isOtherBook) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Finish your current session first',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 12, color: c.textMuted),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
 
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
+
+                      // Notes & Highlights button
+                      Builder(builder: (ctx) {
+                        final nc = AppColors.of(ctx);
+                        return SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.push(ctx,
+                                MaterialPageRoute(builder: (_) => BookNotesPage(book: widget.book))),
+                            icon: Icon(Icons.sticky_note_2_outlined, color: nc.brand, size: 18),
+                            label: Text('Notes & Highlights',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: nc.brand)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: nc.border),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        );
+                      }),
+
+                      const SizedBox(height: 10),
 
                       Row(
                         children: [

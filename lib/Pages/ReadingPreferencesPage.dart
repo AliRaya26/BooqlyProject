@@ -1,5 +1,8 @@
 import 'package:booqly/Pages/HomePage.dart';
+import 'package:booqly/models/book_model.dart';
 import 'package:booqly/models/reading_preferences_model.dart';
+import 'package:booqly/services/book_service.dart';
+import 'package:booqly/services/library_service.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -20,18 +23,29 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   static const _muted = Color(0xFF888580);
   static const _surf = Color(0xFF1A1713);
   static const _minGenres = 3;
+  static const _totalSteps = 3;
 
   final PreferencesService _preferencesService = PreferencesService();
+  final BookService _bookService = BookService();
+  final LibraryService _libraryService = LibraryService();
   final PageController _pageController = PageController();
+  final TextEditingController _searchCtrl = TextEditingController();
 
   PreferenceCatalog? _catalog;
   bool _loadingCatalog = true;
   bool _saving = false;
   int _step = 0;
 
+  // Step 1: genres
   final Set<String> _selectedGenres = {};
   String _readingTheme = 'cozy_dark';
   String _readingPace = 'steady';
+
+  // Step 2: first book
+  List<BookModel> _searchResults = [];
+  bool _searchLoading = false;
+  BookModel? _firstBookPicked;
+  bool _addingBook = false;
 
   @override
   void initState() {
@@ -54,6 +68,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   @override
   void dispose() {
     _pageController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -66,7 +81,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
     });
   }
 
-  bool get _canContinueStep0 => _selectedGenres.length >= _minGenres;
+  bool get _canContinueGenres => _selectedGenres.length >= _minGenres;
 
   void _toggleGenre(String id) {
     setState(() {
@@ -86,6 +101,9 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
     );
     setState(() => _step = step);
   }
+
+  String? get _userName =>
+      FirebaseAuth.instance.currentUser?.displayName?.split(' ').first;
 
   ReadingPreferencesModel _buildPreferences() {
     return ReadingPreferencesModel(
@@ -165,14 +183,51 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
     }
   }
 
-  Future<void> _finish() async {
+  Future<void> _searchBooks(String query) async {
+    if (query.trim().length < 2) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    setState(() => _searchLoading = true);
+    try {
+      final all = await _bookService.getBooks();
+      final q = query.toLowerCase();
+      setState(() {
+        _searchResults = all
+            .where((b) =>
+                b.title.toLowerCase().contains(q) ||
+                b.author.toLowerCase().contains(q))
+            .take(8)
+            .toList();
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  Future<void> _addFirstBookAndFinish() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && _firstBookPicked != null) {
+      setState(() => _addingBook = true);
+      try {
+        await _libraryService.addBook(
+          bookId: _firstBookPicked!.id,
+          status: 'want_to_read',
+          totalPages: _firstBookPicked!.totalPages,
+        );
+      } catch (_) {}
+      setState(() => _addingBook = false);
+    }
     await _saveAndGoHome(_buildPreferences());
   }
 
-  Future<void> _skip() async {
-    await _saveAndGoHome(
-      const ReadingPreferencesModel(preferencesCompleted: true),
-    );
+  Future<void> _finish() async {
+    if (_step < _totalSteps - 1) {
+      _goToStep(_step + 1);
+    } else {
+      await _addFirstBookAndFinish();
+    }
   }
 
   @override
@@ -194,8 +249,9 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                       physics: const NeverScrollableScrollPhysics(),
                       onPageChanged: (i) => setState(() => _step = i),
                       children: [
+                        _buildWelcomeStep(),
                         _buildGenresStep(),
-                        _buildStyleStep(),
+                        _buildFirstBookStep(),
                       ],
                     ),
                   ),
@@ -207,6 +263,20 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   }
 
   Widget _buildHeader() {
+    // Step 0 = Welcome (no step label shown, no back button)
+    if (_step == 0) return const SizedBox.shrink();
+
+    final titles = [
+      '',                          // step 0: welcome (hidden header)
+      'What do you love to read?', // step 1
+      'Add your first book',       // step 2
+    ];
+    final subtitles = [
+      '',
+      'Pick at least $_minGenres genres — we\'ll tailor discovery for you.',
+      'Search for a book to start with. You can always add more later.',
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
       child: Column(
@@ -214,21 +284,20 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
         children: [
           Row(
             children: [
-              if (_step > 0)
-                IconButton(
-                  onPressed: () => _goToStep(0),
-                  icon: const Icon(Icons.arrow_back_rounded, color: _muted),
-                ),
+              IconButton(
+                onPressed: () => _goToStep(_step - 1),
+                icon: const Icon(Icons.arrow_back_rounded, color: _muted),
+              ),
               const Spacer(),
               Text(
-                'Step ${_step + 1} of 2',
+                'Step $_step of ${_totalSteps - 1}',
                 style: GoogleFonts.outfit(color: _muted, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            _step == 0 ? 'What do you love to read?' : 'How do you like to read?',
+            titles[_step],
             style: GoogleFonts.cormorantGaramond(
               fontSize: 36,
               fontWeight: FontWeight.w600,
@@ -238,17 +307,11 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            _step == 0
-                ? 'Pick at least $_minGenres genres — we\'ll tailor discovery for you.'
-                : 'Choose your reading vibe and pace. You can change these later.',
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              color: _muted,
-              height: 1.5,
-            ),
+            subtitles[_step],
+            style: GoogleFonts.outfit(fontSize: 14, color: _muted, height: 1.5),
           ),
           const SizedBox(height: 16),
-          _StepIndicator(current: _step),
+          _StepIndicator(current: _step, total: _totalSteps),
         ],
       ),
     );
@@ -283,77 +346,267 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
     );
   }
 
-  Widget _buildStyleStep() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+  Widget _buildWelcomeStep() {
+    final name = _userName;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Book emoji in a glowing circle
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF221C12),
+                border: Border.all(color: _gold.withValues(alpha: 0.5), width: 2),
+              ),
+              alignment: Alignment.center,
+              child: const Text('📚', style: TextStyle(fontSize: 48)),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              name != null && name.isNotEmpty
+                  ? 'Welcome to Booqly,\n$name!'
+                  : 'Welcome to Booqly!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.cormorantGaramond(
+                fontSize: 42,
+                fontWeight: FontWeight.w600,
+                color: _gold,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Your personal reading companion.\nLet\'s set things up so every '
+              'recommendation feels made just for you.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                color: _muted,
+                height: 1.65,
+              ),
+            ),
+            const SizedBox(height: 48),
+            // Three feature highlights
+            _WelcomeFeatureTile(
+              emoji: '🎯',
+              title: 'Smart Recommendations',
+              subtitle: 'We pick books based on what you actually enjoy.',
+            ),
+            const SizedBox(height: 16),
+            _WelcomeFeatureTile(
+              emoji: '⏱️',
+              title: 'Session Tracking',
+              subtitle: 'Start a timer, log your pages, watch your progress grow.',
+            ),
+            const SizedBox(height: 16),
+            _WelcomeFeatureTile(
+              emoji: '🔔',
+              title: 'Reading Nudges',
+              subtitle: 'We remind you when you have free time — not at random.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFirstBookStep() {
+    return Column(
       children: [
-        Text(
-          'Reading theme',
-          style: GoogleFonts.outfit(
-            color: _ink,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+          child: TextField(
+            controller: _searchCtrl,
+            style: GoogleFonts.outfit(color: _ink, fontSize: 15),
+            onChanged: _searchBooks,
+            decoration: InputDecoration(
+              hintText: 'Search by title or author…',
+              hintStyle: GoogleFonts.outfit(color: _muted),
+              prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+              suffixIcon: _searchLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _gold)),
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFF1A1713),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF2A2520)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF2A2520)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _gold, width: 1.5),
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 12),
-        ..._catalog!.readingThemes.map(
-          (theme) => _OptionCard(
-            option: theme,
-            selected: _readingTheme == theme.id,
-            onTap: () => setState(() => _readingTheme = theme.id),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Reading pace',
-          style: GoogleFonts.outfit(
-            color: _ink,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ..._catalog!.readingPaces.map(
-          (pace) => _OptionCard(
-            option: pace,
-            selected: _readingPace == pace.id,
-            onTap: () => setState(() => _readingPace = pace.id),
-          ),
+        Expanded(
+          child: _searchResults.isEmpty && _searchCtrl.text.length < 2
+              ? Center(
+                  child: Text(
+                    'Type a book title or author name\nto search the catalogue.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(color: _muted, fontSize: 14, height: 1.6),
+                  ),
+                )
+              : _searchResults.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No results found.',
+                        style: GoogleFonts.outfit(color: _muted, fontSize: 14),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: _searchResults.length,
+                      itemBuilder: (context, i) {
+                        final book = _searchResults[i];
+                        final picked = _firstBookPicked?.id == book.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: InkWell(
+                            onTap: () =>
+                                setState(() => _firstBookPicked = picked ? null : book),
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: picked
+                                    ? const Color(0xFF221C12)
+                                    : const Color(0xFF161310),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: picked
+                                      ? _gold
+                                      : const Color(0xFF2A2520),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: book.coverUrl.isNotEmpty
+                                        ? Image.network(
+                                            book.coverUrl,
+                                            width: 46,
+                                            height: 64,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                _BookPlaceholder(book: book),
+                                          )
+                                        : _BookPlaceholder(book: book),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          book.title,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: _ink,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          book.author,
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 12, color: _muted),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: picked
+                                          ? _gold
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: picked ? _gold : _muted,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: picked
+                                        ? const Icon(Icons.check_rounded,
+                                            size: 16,
+                                            color: Color(0xFF0E0C0A))
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );
   }
 
   Widget _buildBottomBar() {
-    final onStep0 = _step == 0;
-    final enabled = onStep0 ? _canContinueStep0 : !_saving;
+    final bool enabled;
+    final String label;
+
+    switch (_step) {
+      case 0: // Welcome
+        enabled = true;
+        label = "Let's start →";
+        break;
+      case 1: // Genres
+        enabled = _canContinueGenres;
+        label = 'Continue';
+        break;
+      default: // First book (step 2)
+        enabled = !_saving && !_addingBook;
+        label = 'Start reading';
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (onStep0)
+          if (_step == 1)
             Text(
               '${_selectedGenres.length} selected · $_minGenres minimum',
               style: GoogleFonts.outfit(
                 fontSize: 13,
-                color: _canContinueStep0 ? _gold : _muted,
+                color: _canContinueGenres ? _gold : _muted,
               ),
             ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: !enabled
-                  ? null
-                  : () async {
-                      if (onStep0) {
-                        _goToStep(1);
-                      } else {
-                        await _finish();
-                      }
-                    },
+              onPressed: !enabled ? null : () async => await _finish(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _gold,
                 disabledBackgroundColor: _surf,
@@ -365,17 +618,14 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                 ),
                 elevation: 0,
               ),
-              child: _saving
+              child: (_saving || _addingBook)
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _bg,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: _bg),
                     )
                   : Text(
-                      onStep0 ? 'Continue' : 'Start reading',
+                      label,
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -383,10 +633,13 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                     ),
             ),
           ),
-          if (!onStep0) ...[
+          if (_step == 2) ...[
             const SizedBox(height: 12),
             TextButton(
-              onPressed: _saving ? null : _skip,
+              onPressed: (_saving || _addingBook) ? null : () async {
+                _firstBookPicked = null;
+                await _addFirstBookAndFinish();
+              },
               child: Text(
                 'Skip for now',
                 style: GoogleFonts.outfit(color: _muted, fontSize: 14),
@@ -400,18 +653,19 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
 }
 
 class _StepIndicator extends StatelessWidget {
-  const _StepIndicator({required this.current});
+  const _StepIndicator({required this.current, required this.total});
 
   final int current;
+  final int total;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: List.generate(2, (i) {
+      children: List.generate(total, (i) {
         final active = i <= current;
         return Expanded(
           child: Container(
-            margin: EdgeInsets.only(right: i == 0 ? 8 : 0),
+            margin: EdgeInsets.only(right: i < total - 1 ? 8 : 0),
             height: 3,
             decoration: BoxDecoration(
               color: active
@@ -590,111 +844,76 @@ class _GenreListTile extends StatelessWidget {
   }
 }
 
-class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.option,
-    required this.selected,
-    required this.onTap,
+class _WelcomeFeatureTile extends StatelessWidget {
+  const _WelcomeFeatureTile({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
   });
-
-  final PreferenceOption option;
-  final bool selected;
-  final VoidCallback onTap;
+  final String emoji;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xFF221C12)
-                  : const Color(0xFF161310),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected
-                    ? const Color(0xFFD4A96A)
-                    : const Color(0xFF2A2520),
-              ),
-            ),
-            child: Row(
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161310),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2A2520)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 26)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1A16),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    option.emoji ?? '•',
-                    style: const TextStyle(fontSize: 22),
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFF5F0E8),
                   ),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option.label,
-                        style: GoogleFonts.outfit(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFF5F0E8),
-                        ),
-                      ),
-                      if (option.subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          option.subtitle!,
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            color: const Color(0xFF888580),
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    color: const Color(0xFF888580),
+                    height: 1.45,
                   ),
-                ),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: selected
-                        ? const Color(0xFFD4A96A)
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: selected
-                          ? const Color(0xFFD4A96A)
-                          : const Color(0xFF888580),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: selected
-                      ? const Icon(
-                          Icons.check_rounded,
-                          size: 16,
-                          color: Color(0xFF0E0C0A),
-                        )
-                      : null,
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
+class _BookPlaceholder extends StatelessWidget {
+  const _BookPlaceholder({required this.book});
+  final dynamic book;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1713),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.book_rounded, color: Color(0xFF888580), size: 22),
+    );
+  }
+}
+

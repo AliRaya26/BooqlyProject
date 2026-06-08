@@ -180,15 +180,87 @@ exports.sendPasswordResetEmail = onCall(
     }
 
     const safeHref = resetLink.replace(/"/g, "&quot;");
-    const html = `
-<!DOCTYPE html>
-<html>
-<body style="font-family:Georgia,serif;background:#0E0C0A;color:#F5F0E8;padding:32px;">
-  <h1 style="color:#D4A96A;">Reset your password</h1>
-  <p>You asked to reset your Booqly password.</p>
-  <p><a href="${safeHref}" style="display:inline-block;background:#D4A96A;color:#0E0C0A;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold;">Reset password</a></p>
-  <p style="color:#888580;font-size:14px;">This link expires in about an hour. If you did not request a reset, you can ignore this email.</p>
-  <p style="color:#888580;font-size:12px;word-break:break-all;">Or copy this link:<br>${escapeHtml(resetLink)}</p>
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Reset your password — Booqly</title>
+</head>
+<body style="margin:0;padding:0;background:#F4F1EC;font-family:'Helvetica Neue',Arial,sans-serif;color:#1A1713;">
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#F4F1EC;">Reset your Booqly password — this link expires in 1 hour.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1EC;">
+    <tr><td align="center" style="padding:40px 16px 48px;">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:520px;width:100%;background:#FFFFFF;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- header -->
+        <tr>
+          <td style="background:#1A1713;padding:36px 40px;">
+            <p style="margin:0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#D4A96A;font-weight:600;">Booqly</p>
+            <h1 style="margin:10px 0 0;font-size:26px;font-weight:700;color:#F5F0E8;line-height:1.2;font-family:Georgia,serif;">
+              Password reset request
+            </h1>
+          </td>
+        </tr>
+        <!-- body -->
+        <tr>
+          <td style="padding:36px 40px 0;">
+            <p style="margin:0;font-size:16px;line-height:1.75;color:#3D3830;">
+              Hi there,<br/><br/>
+              We received a request to reset the password for your Booqly account. Click the button below to choose a new one.
+            </p>
+          </td>
+        </tr>
+        <!-- CTA -->
+        <tr>
+          <td style="padding:32px 40px 0;text-align:center;">
+            <a href="${safeHref}"
+               style="display:inline-block;background:#D4A96A;color:#1A1713;font-size:15px;font-weight:700;padding:16px 40px;border-radius:12px;text-decoration:none;letter-spacing:0.3px;">
+              Reset my password
+            </a>
+          </td>
+        </tr>
+        <!-- fallback link -->
+        <tr>
+          <td style="padding:24px 40px 0;">
+            <p style="margin:0;font-size:13px;color:#9A9390;line-height:1.6;">
+              Button not working? Copy and paste this link into your browser:
+            </p>
+            <p style="margin:8px 0 0;font-size:12px;color:#B89860;word-break:break-all;line-height:1.5;">
+              ${escapeHtml(resetLink)}
+            </p>
+          </td>
+        </tr>
+        <!-- notice -->
+        <tr>
+          <td style="padding:24px 40px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#FBF8F3;border:1px solid #EDE8DF;border-radius:12px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0;font-size:13px;color:#7A7570;line-height:1.6;">
+                    ⏱ &nbsp;This link expires in <strong style="color:#3D3830;">1 hour</strong>.<br/>
+                    🔒 &nbsp;If you didn't request this, you can safely ignore this email — your password won't change.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- divider -->
+        <tr><td style="padding:28px 40px 0;"><div style="height:1px;background:#EDE8DF;">&nbsp;</div></td></tr>
+        <!-- footer -->
+        <tr>
+          <td style="padding:24px 40px 36px;">
+            <p style="margin:0;font-size:13px;color:#7A7570;line-height:1.6;">
+              Stay well,<br/>
+              <span style="color:#B89860;font-style:italic;font-family:Georgia,serif;font-weight:600;">— The Booqly Team</span>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
 
@@ -198,6 +270,133 @@ exports.sendPasswordResetEmail = onCall(
       html,
     });
 
+    return { success: true };
+  },
+);
+
+// ─── Email verification ───────────────────────────────────────────────────────
+
+exports.sendVerificationEmail = onCall(
+  { region: "us-central1", cors: true },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Must be signed in.");
+
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUser(uid);
+    } catch (err) {
+      throw new HttpsError("not-found", "User not found.");
+    }
+
+    if (userRecord.emailVerified) {
+      return { success: true, alreadyVerified: true };
+    }
+
+    const email = userRecord.email;
+    if (!email) throw new HttpsError("failed-precondition", "No email on account.");
+
+    let verifyLink;
+    try {
+      verifyLink = await admin.auth().generateEmailVerificationLink(email);
+    } catch (err) {
+      console.error("generateEmailVerificationLink", err);
+      throw new HttpsError("internal", "Could not generate verification link.");
+    }
+
+    const firstName = (userRecord.displayName || "Reader").split(" ")[0];
+    const safeFirst = escapeHtml(firstName);
+    const safeHref = verifyLink.replace(/"/g, "&quot;");
+    const safeLink = escapeHtml(verifyLink);
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Verify your email — Booqly</title>
+</head>
+<body style="margin:0;padding:0;background:#F4F1EC;font-family:'Helvetica Neue',Arial,sans-serif;color:#1A1713;">
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#F4F1EC;">One tap to verify your Booqly account and start reading.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1EC;">
+    <tr><td align="center" style="padding:40px 16px 48px;">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:520px;width:100%;background:#FFFFFF;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- header -->
+        <tr>
+          <td style="background:#1A1713;padding:36px 40px;">
+            <p style="margin:0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#D4A96A;font-weight:600;">Booqly</p>
+            <h1 style="margin:10px 0 0;font-size:26px;font-weight:700;color:#F5F0E8;line-height:1.2;font-family:Georgia,serif;">
+              Welcome, ${safeFirst}! 🎉<br/>Verify your email to begin.
+            </h1>
+          </td>
+        </tr>
+        <!-- body -->
+        <tr>
+          <td style="padding:36px 40px 0;">
+            <p style="margin:0;font-size:16px;line-height:1.75;color:#3D3830;">
+              Thanks for joining Booqly — your personal reading companion.<br/><br/>
+              Just one step left: confirm your email address so we can keep your account safe and send you reading nudges at the right time.
+            </p>
+          </td>
+        </tr>
+        <!-- CTA -->
+        <tr>
+          <td style="padding:32px 40px 0;text-align:center;">
+            <a href="${safeHref}"
+               style="display:inline-block;background:#D4A96A;color:#1A1713;font-size:15px;font-weight:700;padding:16px 44px;border-radius:12px;text-decoration:none;letter-spacing:0.3px;">
+              Verify my email
+            </a>
+          </td>
+        </tr>
+        <!-- fallback -->
+        <tr>
+          <td style="padding:24px 40px 0;">
+            <p style="margin:0;font-size:13px;color:#9A9390;line-height:1.6;">
+              Button not working? Copy and paste this link into your browser:
+            </p>
+            <p style="margin:8px 0 0;font-size:12px;color:#B89860;word-break:break-all;line-height:1.5;">${safeLink}</p>
+          </td>
+        </tr>
+        <!-- notice -->
+        <tr>
+          <td style="padding:24px 40px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#FBF8F3;border:1px solid #EDE8DF;border-radius:12px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0;font-size:13px;color:#7A7570;line-height:1.6;">
+                    🔒 &nbsp;If you didn't create a Booqly account, you can safely ignore this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- divider -->
+        <tr><td style="padding:28px 40px 0;"><div style="height:1px;background:#EDE8DF;">&nbsp;</div></td></tr>
+        <!-- footer -->
+        <tr>
+          <td style="padding:24px 40px 36px;">
+            <p style="margin:0;font-size:13px;color:#7A7570;line-height:1.6;">
+              Happy reading,<br/>
+              <span style="color:#B89860;font-style:italic;font-family:Georgia,serif;font-weight:600;">— The Booqly Team</span>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    await deliverViaGmail({
+      to: email,
+      subject: `${safeFirst}, verify your Booqly account`,
+      html,
+    });
+
+    console.log(`sendVerificationEmail: sent to "${email}" uid=${uid}`);
     return { success: true };
   },
 );
@@ -269,8 +468,8 @@ function buildNudgeEmailHtml({ firstName, message, timeLabel, slotMinutes }) {
   const greeting = firstName && firstName.trim() ? escapeHtml(firstName.trim()) : "Reader";
   const slotLabel =
     slotMinutes >= 60
-      ? `~${(slotMinutes / 60).toFixed(slotMinutes % 60 === 0 ? 0 : 1)} hours`
-      : `${slotMinutes} minutes`;
+      ? `${(slotMinutes / 60).toFixed(slotMinutes % 60 === 0 ? 0 : 1)} hr`
+      : `${slotMinutes} min`;
   const safeMessage = escapeHtml(message);
   const safeTime = escapeHtml(timeLabel);
 
@@ -281,75 +480,111 @@ function buildNudgeEmailHtml({ firstName, message, timeLabel, slotMinutes }) {
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Time to read — Booqly</title>
 </head>
-<body style="margin:0;padding:0;background:#0E0C0A;font-family:Georgia,'Times New Roman',serif;color:#F5F0E8;-webkit-font-smoothing:antialiased;">
-  <!-- preview text -->
-  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#0E0C0A;">${safeMessage} — ${slotLabel} just opened up in your day.</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E0C0A;">
-    <tr><td align="center" style="padding:32px 16px;">
-      <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:540px;width:100%;background:#1A1713;border:1px solid #2A2520;border-radius:24px;overflow:hidden;">
-        <!-- gold bar -->
-        <tr><td bgcolor="#D4A96A" height="5" style="height:5px;line-height:5px;font-size:0;">&nbsp;</td></tr>
-        <!-- book emoji -->
-        <tr><td align="center" style="padding:40px 32px 0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-            <tr><td align="center" width="80" height="80" style="width:80px;height:80px;background:#2C200F;border-radius:40px;font-size:40px;line-height:80px;text-align:center;">
-              &#128214;
-            </td></tr>
-          </table>
-        </td></tr>
-        <!-- headline -->
-        <tr><td align="center" style="padding:16px 32px 0;">
-          <h1 style="margin:0;font-family:Georgia,serif;font-style:italic;font-size:32px;font-weight:700;color:#D4A96A;letter-spacing:0.3px;line-height:1.15;">
-            A quiet moment, ${greeting}
-          </h1>
-        </td></tr>
-        <!-- message -->
-        <tr><td style="padding:16px 36px 0;">
-          <p style="margin:0;font-size:17px;line-height:1.7;color:#E0D8CC;text-align:center;">
-            ${safeMessage}
-          </p>
-        </td></tr>
-        <!-- free-block card -->
-        <tr><td style="padding:24px 36px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-                 style="background:#0E0C0A;border:1px solid #2A2520;border-radius:16px;padding:20px 24px;">
-            <tr><td>
-              <p style="margin:0;color:#888580;font-size:11px;letter-spacing:2px;text-transform:uppercase;">Your free block</p>
-              <p style="margin:8px 0 0;font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#F5F0E8;line-height:1.2;">
-                ${safeTime}&nbsp;&nbsp;·&nbsp;&nbsp;${slotLabel}
-              </p>
-              <p style="margin:10px 0 0;font-size:14px;color:#888580;line-height:1.5;">
-                That's enough time for a solid chapter. More than enough to remember why you love reading.
-              </p>
-            </td></tr>
-          </table>
-        </td></tr>
-        <!-- quote -->
-        <tr><td style="padding:24px 36px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="padding:0 0 0 16px;border-left:3px solid #D4A96A;">
-              <p style="margin:0;font-family:Georgia,serif;font-style:italic;color:#C8BFB4;font-size:15px;line-height:1.65;">
-                &ldquo;Not all those who wander are lost — but readers always know exactly where they are.&rdquo;
-              </p>
-            </td></tr>
-          </table>
-        </td></tr>
-        <!-- divider -->
-        <tr><td style="padding:28px 36px 0;">
-          <div style="height:1px;background:#2A2520;">&nbsp;</div>
-        </td></tr>
-        <!-- footer -->
-        <tr><td align="center" style="padding:18px 36px 32px;">
-          <p style="margin:0;color:#888580;font-size:13px;line-height:1.7;">
-            Happy reading,<br/>
-            <span style="color:#D4A96A;font-style:italic;font-family:Georgia,serif;">— The Booqly team</span>
-          </p>
-          <p style="margin:14px 0 0;color:#4a4844;font-size:11px;line-height:1.5;">
-            You're getting this because free-time nudges are on in Booqly.<br/>
-            Turn them off anytime: Profile → Settings → Free-time nudges.
-          </p>
-        </td></tr>
+<body style="margin:0;padding:0;background:#F4F1EC;font-family:'Helvetica Neue',Arial,sans-serif;color:#1A1713;">
+  <!-- preview -->
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#F4F1EC;">You have ${slotLabel} free — ${safeTime}. Time to pick up where you left off.</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1EC;">
+    <tr><td align="center" style="padding:40px 16px 48px;">
+
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:560px;width:100%;background:#FFFFFF;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+        <!-- ── HEADER BAND ── -->
+        <tr>
+          <td style="background:#1A1713;padding:36px 40px 32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#D4A96A;font-weight:600;">Booqly</p>
+                  <h1 style="margin:10px 0 0;font-size:28px;font-weight:700;color:#F5F0E8;line-height:1.2;font-family:Georgia,serif;">
+                    Your reading window<br/>is open, ${greeting}.
+                  </h1>
+                </td>
+                <td width="56" style="vertical-align:top;padding-left:16px;">
+                  <div style="width:56px;height:56px;background:#2C200F;border-radius:14px;font-size:28px;line-height:56px;text-align:center;">&#128214;</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── TIME SLOT CARD ── -->
+        <tr>
+          <td style="padding:32px 40px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#FBF8F3;border:1px solid #EDE8DF;border-radius:14px;">
+              <tr>
+                <td style="padding:20px 24px;">
+                  <p style="margin:0;font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:#B89860;font-weight:700;">Free Block</p>
+                  <p style="margin:8px 0 0;font-size:26px;font-weight:700;color:#1A1713;line-height:1.1;font-family:Georgia,serif;">
+                    ${safeTime}
+                  </p>
+                  <p style="margin:6px 0 0;font-size:14px;color:#7A7570;font-weight:500;">${slotLabel} available</p>
+                </td>
+                <td width="80" style="padding:0 24px 0 0;text-align:right;vertical-align:middle;">
+                  <div style="display:inline-block;background:#D4A96A;border-radius:50%;width:48px;height:48px;line-height:48px;text-align:center;font-size:22px;">&#9201;</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── MESSAGE ── -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <p style="margin:0;font-size:16px;line-height:1.75;color:#3D3830;">
+              ${safeMessage}
+            </p>
+          </td>
+        </tr>
+
+        <!-- ── QUOTE ── -->
+        <tr>
+          <td style="padding:28px 40px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-left:3px solid #D4A96A;padding:4px 0 4px 20px;">
+                  <p style="margin:0;font-size:14px;font-style:italic;color:#8A8078;line-height:1.7;font-family:Georgia,serif;">
+                    &ldquo;A reader lives a thousand lives before he dies. The man who never reads lives only one.&rdquo;
+                  </p>
+                  <p style="margin:8px 0 0;font-size:12px;color:#B0A89E;font-weight:600;letter-spacing:0.5px;">— George R.R. Martin</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── DIVIDER ── -->
+        <tr>
+          <td style="padding:32px 40px 0;">
+            <div style="height:1px;background:#EDE8DF;">&nbsp;</div>
+          </td>
+        </tr>
+
+        <!-- ── FOOTER ── -->
+        <tr>
+          <td style="padding:24px 40px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:13px;color:#7A7570;line-height:1.6;">
+                    Happy reading,<br/>
+                    <span style="color:#B89860;font-style:italic;font-family:Georgia,serif;font-weight:600;">— The Booqly Team</span>
+                  </p>
+                </td>
+                <td align="right" style="vertical-align:bottom;">
+                  <p style="margin:0;font-size:22px;">📚</p>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:20px 0 0;font-size:11px;color:#C0B8B0;line-height:1.6;">
+              You're receiving this because free-time nudges are enabled in Booqly.<br/>
+              To turn them off: <span style="color:#B89860;">Profile → Settings → Free-time nudges</span>.
+            </p>
+          </td>
+        </tr>
+
       </table>
     </td></tr>
   </table>

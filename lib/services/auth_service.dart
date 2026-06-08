@@ -223,6 +223,16 @@ class AuthService {
         debugPrint('AuthService.signUp profile write failed: $e');
       }
 
+      // Send styled verification email via Cloud Function.
+      // Fire-and-forget: account creation succeeds even if email fails.
+      EmailService().sendVerificationEmail().then((r) {
+        if (!r.success) {
+          debugPrint('AuthService.signUp: verification email failed: ${r.errorMessage}');
+        } else {
+          debugPrint('AuthService.signUp: verification email sent to $email');
+        }
+      });
+
       return AuthResult(user: user, isNewUser: true);
     } catch (e) {
       debugPrint('AuthService.signUp: $e');

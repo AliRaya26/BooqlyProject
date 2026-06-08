@@ -15,6 +15,7 @@ import 'package:http/http.dart' as http;
 class EmailService {
   static const _callableName = 'sendAuthEmail';
   static const _passwordResetCallableName = 'sendPasswordResetEmail';
+  static const _verificationCallableName = 'sendVerificationEmail';
   static const _mailCollection = 'mail';
   static const _resendUrl = 'https://api.resend.com/emails';
 
@@ -36,6 +37,37 @@ class EmailService {
   String generateVerificationCode() {
     final rng = Random.secure();
     return (100000 + rng.nextInt(900000)).toString();
+  }
+
+  /// Sends a styled verification email via the Cloud Function.
+  /// The user must already be signed in (the function reads uid from auth context).
+  Future<EmailSendResult> sendVerificationEmail() async {
+    try {
+      debugPrint('EmailService.sendVerificationEmail: invoking "$_verificationCallableName"');
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable(
+        _verificationCallableName,
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      final result = await callable.call<Map<String, dynamic>>({});
+      final alreadyVerified = result.data?['alreadyVerified'] == true;
+      if (alreadyVerified) {
+        debugPrint('EmailService.sendVerificationEmail: already verified');
+      } else {
+        debugPrint('EmailService.sendVerificationEmail: sent OK');
+      }
+      return const EmailSendResult(success: true, delivered: true);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('EmailService.sendVerificationEmail: FAILED code=${e.code} message="${e.message}"');
+      return EmailSendResult(
+        success: false,
+        errorMessage: e.message ?? 'Could not send verification email.',
+        functionsErrorCode: e.code,
+      );
+    } catch (e) {
+      debugPrint('EmailService.sendVerificationEmail: unexpected error: $e');
+      return const EmailSendResult(success: false, errorMessage: null);
+    }
   }
 
   /// Password reset via Cloud Function (Resend + Firebase Admin reset link).

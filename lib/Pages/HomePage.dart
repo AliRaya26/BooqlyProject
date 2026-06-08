@@ -1,9 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:booqly/services/reading_session_service.dart';
 import 'package:booqly/Pages/BookChatPage.dart';
 import 'package:booqly/Pages/DiscoverPage.dart';
+import 'package:booqly/Pages/FriendsPage.dart';
+import 'package:booqly/Pages/GoalsPage.dart';
 import 'package:booqly/Pages/LibraryPage.dart';
+import 'package:booqly/services/goals_service.dart';
+import 'package:booqly/models/reading_goal_model.dart';
 import 'package:booqly/Pages/SearchByTitlePage.dart' hide AppColors;
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
@@ -398,7 +403,9 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _TopBar(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              ActiveSessionBanner(),
+              const SizedBox(height: 8),
               _ContinueReadingSection(
                 book: continueBook,
                 isLoading: isLoadingContinue,
@@ -406,6 +413,8 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 28),
               _StreakSection(streakCount: _streakCount),
+              const SizedBox(height: 28),
+              _GoalProgressSection(),
               const SizedBox(height: 28),
               _WantToReadSection(
                 books: wantToReadBooks,
@@ -423,7 +432,7 @@ class _HomePageState extends State<HomePage> {
       case 2:
         return const LibraryPage();
       case 3:
-        return const BookChatPage();
+        return const FriendsPage();
       case 4:
         return const SettingsPage(embeddedInTab: true);
       default:
@@ -777,20 +786,57 @@ class _ContinueReadingCard extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: () => _resumeReading(context),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: c.brand,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14))),
-            child: Text('Continue Reading',
-                style: GoogleFonts.outfit(
-                    fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-          ),
+        ValueListenableBuilder<ActiveSession?>(
+          valueListenable: ReadingSessionService.instance.active,
+          builder: (context, session, _) {
+            final isActive = session?.bookId == book.id;
+            return SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {
+                  if (isActive) {
+                    showStopSessionSheet(context);
+                  } else {
+                    ReadingSessionService.instance.start(
+                      bookId: book.id,
+                      bookTitle: book.title,
+                      coverUrl: book.coverUrl,
+                      currentPage: book.currentPage,
+                      totalPages: book.totalPages,
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: isActive ? c.red : c.brand,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14))),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isActive ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                      color: Colors.white, size: 20,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isActive
+                          ? 'Stop  ·  ${session!.elapsedLabel}'
+                          : 'Start Reading',
+                      style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          fontFeatures: isActive
+                              ? const [FontFeature.tabularFigures()]
+                              : null),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ]),
     );
@@ -798,6 +844,174 @@ class _ContinueReadingCard extends StatelessWidget {
 }
 
 // ─── Reading Streak ───────────────────────────────────────────────────────────
+
+// ─── Goal progress section ────────────────────────────────────────────────────
+
+class _GoalProgressSection extends StatelessWidget {
+  const _GoalProgressSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    return FutureBuilder<GoalProgress>(
+      future: GoalsService().getProgress(),
+      builder: (context, snap) {
+        final progress = snap.data;
+        if (progress == null || !progress.goal.hasAnyGoal) {
+          // Show a subtle "Set a goal" prompt
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const GoalsPage())),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: BoxDecoration(
+                  color: c.surfaceAlt,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: c.border),
+                ),
+                child: Row(children: [
+                  Icon(Icons.flag_rounded, color: c.brand, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Set a reading goal for ${DateTime.now().year}',
+                      style: GoogleFonts.outfit(fontSize: 14, color: c.textMuted))),
+                  Icon(Icons.chevron_right_rounded, color: c.textMuted, size: 20),
+                ]),
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: GestureDetector(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const GoalsPage())),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: c.border),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Icon(Icons.flag_rounded, color: c.brand, size: 18),
+                  const SizedBox(width: 8),
+                  Text('Reading Goals', style: GoogleFonts.outfit(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: c.text,
+                      letterSpacing: 0.3)),
+                  const Spacer(),
+                  Icon(Icons.chevron_right_rounded, color: c.textMuted, size: 18),
+                ]),
+                const SizedBox(height: 14),
+                Row(children: [
+                  if (progress.goal.hasYearlyGoal)
+                    Expanded(child: _GoalRing(
+                      progress: progress.yearlyProgress,
+                      current: progress.booksCompletedThisYear,
+                      goal: progress.goal.yearlyBookGoal,
+                      label: 'books this year',
+                      c: c,
+                    )),
+                  if (progress.goal.hasYearlyGoal && progress.goal.hasDailyGoal)
+                    const SizedBox(width: 16),
+                  if (progress.goal.hasDailyGoal)
+                    Expanded(child: _GoalRing(
+                      progress: progress.dailyProgress,
+                      current: progress.pagesReadToday,
+                      goal: progress.goal.dailyPageGoal,
+                      label: 'pages today',
+                      c: c,
+                    )),
+                ]),
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GoalRing extends StatelessWidget {
+  const _GoalRing({
+    required this.progress,
+    required this.current,
+    required this.goal,
+    required this.label,
+    required this.c,
+  });
+  final double progress;
+  final int current, goal;
+  final String label;
+  final AppPalette c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      SizedBox(
+        width: 52, height: 52,
+        child: CustomPaint(
+          painter: _RingPainter(progress: progress, color: c.brand,
+              trackColor: c.brandSoft),
+          child: Center(child: Text(
+            '${(progress * 100).round()}%',
+            style: GoogleFonts.outfit(
+                fontSize: 10, fontWeight: FontWeight.w700, color: c.brand),
+          )),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('$current / $goal',
+            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: c.text)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 11, color: c.textMuted)),
+      ])),
+    ]);
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  const _RingPainter({required this.progress, required this.color, required this.trackColor});
+  final double progress;
+  final Color color, trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = (size.width - 7) / 2;
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    final arcPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    const startAngle = -1.5708; // -π/2
+    canvas.drawCircle(Offset(cx, cy), r, trackPaint);
+    if (progress > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r),
+        startAngle,
+        6.2832 * progress.clamp(0, 1),
+        false,
+        arcPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) =>
+      old.progress != progress || old.color != color;
+}
+
+// ─── Streak section ───────────────────────────────────────────────────────────
 
 class _StreakSection extends StatelessWidget {
   const _StreakSection({required this.streakCount});
@@ -1548,7 +1762,7 @@ class _BottomNav extends StatelessWidget {
           _NavItem(icon: Icons.home_rounded,         label: 'Home',     index: 0, selected: selectedIndex, onTap: onTap),
           _NavItem(icon: Icons.explore_rounded,      label: 'Discover', index: 1, selected: selectedIndex, onTap: onTap),
           _NavItem(icon: Icons.library_books_rounded,label: 'Library',  index: 2, selected: selectedIndex, onTap: onTap),
-          _NavItem(icon: Icons.auto_awesome_rounded, label: 'Ask AI',   index: 3, selected: selectedIndex, onTap: onTap),
+          _NavItem(icon: Icons.people_alt_rounded,   label: 'Friends',  index: 3, selected: selectedIndex, onTap: onTap),
           _NavItem(icon: Icons.person_rounded,       label: 'Profile',  index: 4, selected: selectedIndex, onTap: onTap),
         ],
       ),

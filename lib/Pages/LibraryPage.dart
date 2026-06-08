@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:booqly/Pages/BookDetailPage.dart';
+import 'package:booqly/services/reading_session_service.dart';
 import 'package:booqly/theme/app_colors.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -603,6 +604,72 @@ class _BookTile extends StatelessWidget {
                           size: 16, color: Colors.white),
                     ),
                   ),
+                ),
+              ),
+            // Start / Stop reading button (only for "reading" books)
+            if (showProgress && !isSelected)
+              Positioned(
+                bottom: 6,
+                right: 6,
+                child: ValueListenableBuilder<ActiveSession?>(
+                  valueListenable: ReadingSessionService.instance.active,
+                  builder: (ctx, session, _) {
+                    final isThisBook = session?.bookId == book.id;
+                    return GestureDetector(
+                      onTap: () {
+                        if (isThisBook) {
+                          showStopSessionSheet(context);
+                        } else {
+                          if (session != null) {
+                            // Different book active — ask to switch
+                            showStopSessionSheet(context);
+                            return;
+                          }
+                          ReadingSessionService.instance.start(
+                            bookId: book.id,
+                            bookTitle: book.title,
+                            coverUrl: book.coverUrl,
+                            currentPage: book.currentPage,
+                            totalPages: book.totalPages,
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isThisBook
+                              ? c.brand
+                              : Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: isThisBook
+                            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                                Icon(Icons.stop_rounded,
+                                    size: 11, color: Colors.white),
+                                const SizedBox(width: 3),
+                                Text(session!.elapsedLabel,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures()
+                                        ])),
+                              ])
+                            : Row(mainAxisSize: MainAxisSize.min, children: [
+                                Icon(Icons.play_arrow_rounded,
+                                    size: 11, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Text('Read',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white)),
+                              ]),
+                      ),
+                    );
+                  },
                 ),
               ),
           ]),
