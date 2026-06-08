@@ -436,9 +436,9 @@ class SocialService {
 
       String? topBookId;
       int topCount = 0;
-      bookReadCount.forEach((bid, count) {
-        if (count > topCount) {
-          topCount = count;
+      bookReadCount.forEach((bid, n) {
+        if (n > topCount) {
+          topCount = n;
           topBookId = bid;
         }
       });

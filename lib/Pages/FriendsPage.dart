@@ -97,7 +97,7 @@ class _FriendsPageState extends State<FriendsPage>
       await _service.follow(profile.uid);
     }
     await _loadFollowing();
-    if (_lastQuery.isNotEmpty) await _search(_lastQuery + ' ');
+    if (_lastQuery.isNotEmpty) await _search('$_lastQuery ');
   }
 
   /// Navigate to book detail page (fetches from catalog; shows snackbar if not found).
@@ -414,7 +414,7 @@ class _ActivityCard extends StatelessWidget {
                 color: isQuote ? c.brandSoft : c.surfaceAlt,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isQuote ? c.brand.withOpacity(0.25) : c.border,
+                  color: isQuote ? c.brand.withValues(alpha: 0.25) : c.border,
                 ),
               ),
               child: Text(

@@ -1,5 +1,4 @@
 import 'package:booqly/models/book_model.dart';
-import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/social_service.dart';
 import 'package:booqly/theme/app_colors.dart';
 import 'package:booqly/Pages/BookDetailPage.dart';
@@ -29,7 +28,6 @@ class FriendNotesPage extends StatefulWidget {
 
 class _FriendNotesPageState extends State<FriendNotesPage> {
   final _social = SocialService();
-  final _bookService = BookService();
 
   List<Map<String, dynamic>> _notes = [];
   bool _loading = true;
@@ -192,7 +190,7 @@ class _NoteCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isQuote ? c.brandSoft : c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isQuote ? c.brand.withOpacity(0.3) : c.border),
+        border: Border.all(color: isQuote ? c.brand.withValues(alpha: 0.3) : c.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
