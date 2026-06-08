@@ -1732,7 +1732,7 @@ class _Bar extends StatelessWidget {
                       : null,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 label,
                 style: GoogleFonts.outfit(
