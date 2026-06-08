@@ -581,19 +581,35 @@ class _TopBar extends StatelessWidget {
             Text('Keep reading',
                 style: GoogleFonts.outfit(fontSize: 13, color: c.textSub)),
           ]),
-          GestureDetector(
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                  color: c.surface,
-                  shape: BoxShape.circle,
-                  boxShadow: cardShadow(context)),
-              child: Icon(Icons.settings_outlined, color: c.textSub, size: 20),
+          Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const BookChatPage())),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                    color: c.surface,
+                    shape: BoxShape.circle,
+                    boxShadow: cardShadow(context)),
+                child: Icon(Icons.smart_toy_outlined, color: c.brand, size: 20),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                    color: c.surface,
+                    shape: BoxShape.circle,
+                    boxShadow: cardShadow(context)),
+                child: Icon(Icons.settings_outlined, color: c.textSub, size: 20),
+              ),
+            ),
+          ]),
         ],
       ),
     );
