@@ -226,20 +226,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     if (!mounted) return;
 
+    final c = AppColors.of(context);
     setState(() => _currentPage = widget.book.totalPages);
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (_) {
+      barrierColor: c.scrim,
+      builder: (dialogContext) {
+        final dc = AppColors.of(dialogContext);
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: dc.surface,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: kCardShadow,
+              boxShadow: cardShadow(dialogContext),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -249,22 +251,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   height: 90,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.brandSoft,
+                    color: dc.brandSoft,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.emoji_events_rounded,
                     size: 48,
-                    color: AppColors.brand,
+                    color: dc.brand,
                   ),
                 ),
                 const SizedBox(height: 24),
                 Text(
                   "Congratulations!",
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.cormorantGaramond(
+                  style: GoogleFonts.figtree(
                     fontSize: 34,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.text,
+                    color: dc.text,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -275,14 +277,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     height: 1.6,
-                    color: AppColors.textSub,
+                    color: dc.textSub,
                   ),
                 ),
                 const SizedBox(height: 26),
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceAlt,
+                    color: dc.surfaceAlt,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -295,20 +297,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             style: GoogleFonts.outfit(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.brand,
+                              color: dc.brand,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             "Pages",
                             style: GoogleFonts.outfit(
-                              color: AppColors.textSub,
+                              color: dc.textSub,
                               fontSize: 12,
                             ),
                           ),
                         ],
                       ),
-                      Container(width: 1, height: 40, color: AppColors.border),
+                      Container(width: 1, height: 40, color: dc.border),
                       Column(
                         children: [
                           Text(
@@ -316,14 +318,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             style: GoogleFonts.outfit(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.brand,
+                              color: dc.brand,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             "Finished",
                             style: GoogleFonts.outfit(
-                              color: AppColors.textSub,
+                              color: dc.textSub,
                               fontSize: 12,
                             ),
                           ),
@@ -333,14 +335,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 22),
-                _CompletionEmailStatus(emailFuture: emailFuture),
+                _CompletionEmailStatus(
+                  colors: dc,
+                  emailFuture: emailFuture,
+                ),
                 const SizedBox(height: 22),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brand,
+                      backgroundColor: dc.brand,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -351,7 +356,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       style: GoogleFonts.outfit(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: dc.onPrimary,
                       ),
                     ),
                   ),
@@ -366,17 +371,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+
     if (_statusLoading || _loadingProgress) {
-      return const Scaffold(
-        backgroundColor: AppColors.bg,
-        body: Center(child: CircularProgressIndicator(color: AppColors.brand)),
+      return Scaffold(
+        backgroundColor: c.bg,
+        body: Center(child: CircularProgressIndicator(color: c.brand)),
       );
     }
 
     final progressPercent = ((_currentPage / widget.book.totalPages) * 100).round();
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: c.bg,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,30 +399,30 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           widget.book.coverUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(
-                            color: AppColors.surfaceAlt,
-                            child: const Icon(
+                            color: c.surfaceAlt,
+                            child: Icon(
                               Icons.broken_image_rounded,
-                              color: AppColors.brand,
+                              color: c.brand,
                               size: 50,
                             ),
                           ),
                         )
                       : kIsWeb
                           ? Container(
-                              color: AppColors.surfaceAlt,
-                              child: const Center(
+                              color: c.surfaceAlt,
+                              child: Center(
                                 child: Icon(Icons.menu_book_rounded,
-                                    color: AppColors.brand, size: 64),
+                                    color: c.brand, size: 64),
                               ),
                             )
                           : Image.file(
                               File(widget.book.coverUrl),
                               fit: BoxFit.cover,
                               errorBuilder: (ctx, err, stack) => Container(
-                                color: AppColors.surfaceAlt,
-                                child: const Icon(
+                                color: c.surfaceAlt,
+                                child: Icon(
                                   Icons.broken_image_rounded,
-                                  color: AppColors.brand,
+                                  color: c.brand,
                                   size: 50,
                                 ),
                               ),
@@ -424,12 +431,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 // Gradient overlay
                 Positioned.fill(
                   child: DecoratedBox(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Color(0x99000000)],
-                        stops: [0.5, 1.0],
+                        colors: [Colors.transparent, c.overlay],
+                        stops: const [0.5, 1.0],
                       ),
                     ),
                   ),
@@ -444,13 +451,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: c.surface,
                         shape: BoxShape.circle,
-                        boxShadow: kCardShadow,
+                        boxShadow: cardShadow(context),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_back_ios_new_rounded,
-                        color: AppColors.text,
+                        color: c.text,
                         size: 16,
                       ),
                     ),
@@ -461,7 +468,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
             // White content area
             Container(
-              color: AppColors.bg,
+              color: c.bg,
               child: SafeArea(
                 top: false,
                 child: Padding(
@@ -476,13 +483,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.brandSoft,
+                          color: c.brandSoft,
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
                           widget.book.category,
                           style: GoogleFonts.outfit(
-                            color: AppColors.brand,
+                            color: c.brand,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -491,14 +498,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
                       const SizedBox(height: 16),
 
-                      // Title — Cormorant Garamond
+                      // Title — Figtree
                       Text(
                         widget.book.title,
-                        style: GoogleFonts.cormorantGaramond(
+                        style: GoogleFonts.figtree(
                           fontSize: 36,
                           height: 1.1,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.text,
+                          color: c.text,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -509,7 +516,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         'by ${widget.book.author}',
                         style: GoogleFonts.outfit(
                           fontSize: 15,
-                          color: AppColors.textSub,
+                          color: c.textSub,
                         ),
                       ),
 
@@ -519,6 +526,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         children: [
                           Expanded(
                             child: _InfoCard(
+                              colors: c,
                               title: 'Pages',
                               value: '${widget.book.totalPages}',
                               icon: Icons.menu_book_rounded,
@@ -527,6 +535,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _InfoCard(
+                              colors: c,
                               title: 'Category',
                               value: widget.book.category,
                               icon: Icons.category_rounded,
@@ -542,7 +551,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         style: GoogleFonts.outfit(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.text,
+                          color: c.text,
                         ),
                       ),
 
@@ -553,7 +562,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           height: 1.7,
-                          color: AppColors.textSub,
+                          color: c.textSub,
                         ),
                       ),
 
@@ -563,18 +572,18 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: c.surface,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: kCardShadow,
+                          boxShadow: cardShadow(context),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.auto_stories_rounded,
-                                  color: AppColors.brand,
+                                  color: c.brand,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 10),
@@ -583,7 +592,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                   style: GoogleFonts.outfit(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.text,
+                                    color: c.text,
                                   ),
                                 ),
                               ],
@@ -594,17 +603,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 children: [
                                   Text(
                                     "$_currentPage",
-                                    style: GoogleFonts.cormorantGaramond(
+                                    style: GoogleFonts.figtree(
                                       fontSize: 56,
                                       fontWeight: FontWeight.w700,
-                                      color: AppColors.brand,
+                                      color: c.brand,
                                     ),
                                   ),
                                   Text(
                                     "Current Page",
                                     style: GoogleFonts.outfit(
                                       fontSize: 13,
-                                      color: AppColors.textSub,
+                                      color: c.textSub,
                                     ),
                                   ),
                                 ],
@@ -617,14 +626,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 Text(
                                   "0",
                                   style: GoogleFonts.outfit(
-                                    color: AppColors.textMuted,
+                                    color: c.textMuted,
                                     fontSize: 12,
                                   ),
                                 ),
                                 Text(
                                   "$progressPercent% completed",
                                   style: GoogleFonts.outfit(
-                                    color: AppColors.brand,
+                                    color: c.brand,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13,
                                   ),
@@ -632,7 +641,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 Text(
                                   "${widget.book.totalPages}",
                                   style: GoogleFonts.outfit(
-                                    color: AppColors.textMuted,
+                                    color: c.textMuted,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -641,10 +650,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             const SizedBox(height: 10),
                             SliderTheme(
                               data: SliderTheme.of(context).copyWith(
-                                activeTrackColor: AppColors.brand,
-                                inactiveTrackColor: AppColors.brandMid,
-                                thumbColor: AppColors.brand,
-                                overlayColor: AppColors.brand.withValues(alpha: 0.15),
+                                activeTrackColor: c.brand,
+                                inactiveTrackColor: c.brandMid,
+                                thumbColor: c.brand,
+                                overlayColor: c.brand.withValues(alpha: 0.15),
                                 trackHeight: 4,
                               ),
                               child: Slider(
@@ -671,13 +680,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       decoration: BoxDecoration(
-                                        color: AppColors.surfaceAlt,
+                                        color: c.surfaceAlt,
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.border),
+                                        border: Border.all(color: c.border),
                                       ),
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.remove_rounded,
-                                        color: AppColors.text,
+                                        color: c.text,
                                       ),
                                     ),
                                   ),
@@ -695,14 +704,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       decoration: BoxDecoration(
-                                        color: AppColors.brand,
+                                        color: c.brand,
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Center(
                                         child: Text(
                                           "Read Next Page",
                                           style: GoogleFonts.outfit(
-                                            color: Colors.white,
+                                            color: c.onPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -722,13 +731,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       decoration: BoxDecoration(
-                                        color: AppColors.surfaceAlt,
+                                        color: c.surfaceAlt,
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.border),
+                                        border: Border.all(color: c.border),
                                       ),
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.add_rounded,
-                                        color: AppColors.text,
+                                        color: c.text,
                                       ),
                                     ),
                                   ),
@@ -808,7 +817,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                         },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: isThisBook
-                                        ? Colors.red.shade700
+                                        ? c.error
                                         : c.brand,
                                     disabledBackgroundColor:
                                         c.border,
@@ -825,9 +834,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            const Icon(
+                                            Icon(
                                                 Icons.stop_rounded,
-                                                color: Colors.white,
+                                                color: c.onPrimary,
                                                 size: 20),
                                             const SizedBox(width: 8),
                                             Text(
@@ -835,7 +844,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                               style: GoogleFonts.outfit(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
-                                                color: Colors.white,
+                                                color: c.onPrimary,
                                                 fontFeatures: const [
                                                   FontFeature.tabularFigures()
                                                 ],
@@ -850,7 +859,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                           style: GoogleFonts.outfit(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: Colors.white,
+                                            color: c.onPrimary,
                                           ),
                                         ),
                                 ),
@@ -914,20 +923,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
                               },
                               icon: Icon(
                                 Icons.bookmark_border_rounded,
-                                color: AppColors.brand,
+                                color: c.brand,
                               ),
                               label: Text(
                                 _bookStatus == "want_to_read"
                                     ? 'Remove from List'
                                     : 'Want to Read',
                                 style: GoogleFonts.outfit(
-                                  color: AppColors.text,
+                                  color: c.text,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: AppColors.border),
+                                side: BorderSide(color: c.border),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -952,19 +961,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                   setState(() => _isFavorite = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      backgroundColor: AppColors.surface,
+                                      backgroundColor: c.surface,
                                       behavior: SnackBarBehavior.floating,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       content: Row(
                                         children: [
-                                          const Icon(Icons.heart_broken_rounded, color: Colors.red),
+                                          Icon(Icons.heart_broken_rounded, color: c.error),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(
                                               "Removed from favorites",
-                                              style: GoogleFonts.outfit(color: AppColors.text),
+                                              style: GoogleFonts.outfit(color: c.text),
                                             ),
                                           ),
                                         ],
@@ -988,19 +997,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    backgroundColor: AppColors.surface,
+                                    backgroundColor: c.surface,
                                     behavior: SnackBarBehavior.floating,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     content: Row(
                                       children: [
-                                        const Icon(Icons.favorite_rounded, color: Colors.red),
+                                        Icon(Icons.favorite_rounded, color: c.error),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             "Added to your favorites ❤️",
-                                            style: GoogleFonts.outfit(color: AppColors.text),
+                                            style: GoogleFonts.outfit(color: c.text),
                                           ),
                                         ),
                                       ],
@@ -1014,18 +1023,18 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                 _isFavorite
                                     ? Icons.favorite_rounded
                                     : Icons.favorite_border_rounded,
-                                color: AppColors.brand,
+                                color: c.brand,
                               ),
                               label: Text(
                                 _isFavorite ? 'Remove Favorite' : 'Favorite',
                                 style: GoogleFonts.outfit(
-                                  color: AppColors.text,
+                                  color: c.text,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: AppColors.border),
+                                side: BorderSide(color: c.border),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -1070,14 +1079,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             _bookStatus == "completed"
                                 ? Icons.refresh_rounded
                                 : Icons.check_circle_rounded,
-                            color: AppColors.brand,
+                            color: c.brand,
                           ),
                           label: Text(
                             _bookStatus == "completed"
                                 ? "Mark Incomplete"
                                 : "Mark as Completed",
                             style: GoogleFonts.outfit(
-                              color: AppColors.text,
+                              color: c.text,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1085,8 +1094,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             side: BorderSide(
                               color: _bookStatus == "completed"
-                                  ? AppColors.border
-                                  : AppColors.brand,
+                                  ? c.border
+                                  : c.brand,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -1098,6 +1107,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       const SizedBox(height: 40),
 
                       _BookFeedbacksSection(
+                        colors: c,
                         bookId: widget.book.id,
                         feedbackService: _feedbackService,
                       ),
@@ -1117,24 +1127,27 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
 class _BookFeedbacksSection extends StatelessWidget {
   const _BookFeedbacksSection({
+    required this.colors,
     required this.bookId,
     required this.feedbackService,
   });
 
+  final AppPalette colors;
   final String bookId;
   final FeedbackService feedbackService;
 
   @override
   Widget build(BuildContext context) {
+    final c = colors;
     return StreamBuilder<List<FeedbackModel>>(
       stream: feedbackService.feedbacksStream(bookId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               child: CircularProgressIndicator(
-                color: AppColors.brand,
+                color: c.brand,
                 strokeWidth: 2,
               ),
             ),
@@ -1157,18 +1170,18 @@ class _BookFeedbacksSection extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.text,
+                    color: c.text,
                   ),
                 ),
                 const Spacer(),
-                _StarRating(value: average, size: 18),
+                _StarRating(colors: c, value: average, size: 18),
                 const SizedBox(width: 6),
                 Text(
                   '${average.toStringAsFixed(1)} (${reviews.length})',
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.brand,
+                    color: c.brand,
                   ),
                 ),
               ],
@@ -1177,7 +1190,7 @@ class _BookFeedbacksSection extends StatelessWidget {
             ...reviews.map(
               (review) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _FeedbackCard(review: review),
+                child: _FeedbackCard(colors: c, review: review),
               ),
             ),
           ],
@@ -1188,19 +1201,21 @@ class _BookFeedbacksSection extends StatelessWidget {
 }
 
 class _FeedbackCard extends StatelessWidget {
-  const _FeedbackCard({required this.review});
+  const _FeedbackCard({required this.colors, required this.review});
 
+  final AppPalette colors;
   final FeedbackModel review;
 
   @override
   Widget build(BuildContext context) {
+    final c = colors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: kCardShadow,
+        boxShadow: cardShadow(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1213,11 +1228,11 @@ class _FeedbackCard extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.text,
+                    color: c.text,
                   ),
                 ),
               ),
-              _StarRating(value: review.rating.toDouble(), size: 14),
+              _StarRating(colors: c, value: review.rating.toDouble(), size: 14),
             ],
           ),
           const SizedBox(height: 10),
@@ -1226,7 +1241,7 @@ class _FeedbackCard extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 14,
               height: 1.55,
-              color: AppColors.textSub,
+              color: c.textSub,
             ),
           ),
         ],
@@ -1236,13 +1251,15 @@ class _FeedbackCard extends StatelessWidget {
 }
 
 class _StarRating extends StatelessWidget {
-  const _StarRating({required this.value, this.size = 16});
+  const _StarRating({required this.colors, required this.value, this.size = 16});
 
+  final AppPalette colors;
   final double value;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final c = colors;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
@@ -1255,7 +1272,7 @@ class _StarRating extends StatelessWidget {
               ? Icons.star_half_rounded
               : Icons.star_outline_rounded,
           size: size,
-          color: AppColors.amber,
+          color: c.warning,
         );
       }),
     );
@@ -1264,26 +1281,29 @@ class _StarRating extends StatelessWidget {
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
+    required this.colors,
     required this.title,
     required this.value,
     required this.icon,
   });
 
+  final AppPalette colors;
   final String title;
   final String value;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) {
+    final c = colors;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: c.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
-          Icon(icon, color: AppColors.brand, size: 22),
+          Icon(icon, color: c.brand, size: 22),
           const SizedBox(height: 8),
           Text(
             value,
@@ -1291,13 +1311,13 @@ class _InfoCard extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.text,
+              color: c.text,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSub),
+            style: GoogleFonts.outfit(fontSize: 12, color: c.textSub),
           ),
         ],
       ),
@@ -1312,18 +1332,24 @@ class _CompletionEmailOutcome {
 }
 
 class _CompletionEmailStatus extends StatelessWidget {
+  final AppPalette colors;
   final Future<_CompletionEmailOutcome> emailFuture;
-  const _CompletionEmailStatus({required this.emailFuture});
+  const _CompletionEmailStatus({
+    required this.colors,
+    required this.emailFuture,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final c = colors;
     return FutureBuilder<_CompletionEmailOutcome>(
       future: emailFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return _row(
+            colors: c,
             icon: Icons.mail_outline_rounded,
-            color: AppColors.textMuted,
+            color: c.textMuted,
             text: 'Sending congratulations email…',
             showSpinner: true,
           );
@@ -1332,17 +1358,19 @@ class _CompletionEmailStatus extends StatelessWidget {
         final outcome = snapshot.data;
         if (outcome == null) {
           return _row(
+            colors: c,
             icon: Icons.error_outline_rounded,
-            color: AppColors.red,
+            color: c.error,
             text: 'Could not send congratulations email.',
           );
         }
 
         return _row(
+          colors: c,
           icon: outcome.success
               ? Icons.check_circle_outline_rounded
               : Icons.error_outline_rounded,
-          color: outcome.success ? AppColors.green : AppColors.red,
+          color: outcome.success ? c.success : c.error,
           text: outcome.message,
         );
       },
@@ -1350,17 +1378,19 @@ class _CompletionEmailStatus extends StatelessWidget {
   }
 
   Widget _row({
+    required AppPalette colors,
     required IconData icon,
     required Color color,
     required String text,
     bool showSpinner = false,
   }) {
+    final c = colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: c.surfaceAlt,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1382,7 +1412,7 @@ class _CompletionEmailStatus extends StatelessWidget {
               text,
               style: GoogleFonts.outfit(
                 fontSize: 13,
-                color: AppColors.textSub,
+                color: c.textSub,
                 height: 1.4,
               ),
             ),

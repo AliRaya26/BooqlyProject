@@ -44,7 +44,7 @@ class _ReadingWrappedPageState extends State<ReadingWrappedPage> {
         ),
         title: Text(
           'Reading Wrapped',
-          style: GoogleFonts.cormorantGaramond(
+          style: GoogleFonts.figtree(
               fontSize: 22, fontWeight: FontWeight.w700, color: c.text),
         ),
       ),
@@ -194,7 +194,7 @@ class _HeroBanner extends StatelessWidget {
           Text(
             'Your Reading\nWrapped',
             textAlign: TextAlign.center,
-            style: GoogleFonts.cormorantGaramond(
+            style: GoogleFonts.figtree(
               fontSize: 40, fontWeight: FontWeight.w700,
               color: c.text, height: 1.1,
             ),
@@ -209,7 +209,7 @@ class _HeroBanner extends StatelessWidget {
             ),
             child: Text(
               firstName,
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                 fontSize: 20, fontStyle: FontStyle.italic,
                 color: c.brand, fontWeight: FontWeight.w600,
               ),
@@ -280,7 +280,7 @@ class _BigStatCard extends StatelessWidget {
           Text(label,
               style: GoogleFonts.outfit(fontSize: 12, color: c.textMuted, letterSpacing: 0.4)),
           Text(value,
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 42, fontWeight: FontWeight.w700, color: c.brand, height: 1.0)),
           const SizedBox(height: 2),
           Text(sublabel,
@@ -322,7 +322,7 @@ class _MiniStatCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(value,
-            style: GoogleFonts.cormorantGaramond(
+            style: GoogleFonts.figtree(
                 fontSize: 34, fontWeight: FontWeight.w700, color: c.brand, height: 1.0)),
         const SizedBox(height: 4),
         Text(label,
@@ -376,7 +376,7 @@ class _TopBookCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(title,
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 20, fontWeight: FontWeight.w700,
                   color: c.text, height: 1.2)),
           const SizedBox(height: 6),
@@ -427,7 +427,7 @@ class _QuoteFooter extends StatelessWidget {
         Text(
           quote,
           textAlign: TextAlign.center,
-          style: GoogleFonts.cormorantGaramond(
+          style: GoogleFonts.figtree(
             fontSize: 17, fontStyle: FontStyle.italic,
             color: c.text, height: 1.6,
           ),

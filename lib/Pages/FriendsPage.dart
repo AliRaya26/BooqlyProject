@@ -246,7 +246,7 @@ class _FriendsPageState extends State<FriendsPage>
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text('Friends',
-            style: GoogleFonts.cormorantGaramond(
+            style: GoogleFonts.figtree(
                 fontSize: 26, fontWeight: FontWeight.w700, color: c.text)),
         actions: [
           _seeding
@@ -448,11 +448,11 @@ class _PostCard extends StatelessWidget {
     } else if (isReview) {
       actionText = 'reviewed';
       typeIcon = Icons.star_rounded;
-      typeColor = Colors.amber;
+      typeColor = c.warning;
     } else if (isCompleted) {
       actionText = 'finished reading';
       typeIcon = Icons.check_circle_rounded;
-      typeColor = Colors.green;
+      typeColor = c.success;
     } else {
       actionText = 'is reading';
       typeIcon = Icons.menu_book_rounded;
@@ -574,7 +574,7 @@ class _PostCard extends StatelessWidget {
                           ? Icons.star_rounded
                           : Icons.star_border_rounded,
                       size: 18,
-                      color: Colors.amber,
+                      color: c.warning,
                     )),
                   ),
                   if (a.reviewText != null) ...[
@@ -597,20 +597,20 @@ class _PostCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.08),
+                    color: c.successSoft,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: Colors.green.withValues(alpha: 0.2))),
+                        color: c.success.withValues(alpha: 0.2))),
                 child: Row(children: [
-                  const Icon(Icons.auto_stories_rounded,
-                      color: Colors.green, size: 16),
+                  Icon(Icons.auto_stories_rounded,
+                      color: c.success, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                         '${a.userName.split(' ').first} finished "${a.bookTitle}"  🎉',
                         style: GoogleFonts.outfit(
                             fontSize: 13,
-                            color: Colors.green.shade700,
+                            color: c.success,
                             fontWeight: FontWeight.w500)),
                   ),
                 ]),
@@ -834,7 +834,7 @@ class _FollowBtn extends StatelessWidget {
                       width: 14, height: 14,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: isFollowing ? c.brand : Colors.white,
+                        color: isFollowing ? c.brand : c.onPrimary,
                       ),
                     ),
                   ),
@@ -844,7 +844,7 @@ class _FollowBtn extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isFollowing ? c.textMuted : Colors.white,
+                    color: isFollowing ? c.textMuted : c.onPrimary,
                   ),
                 ),
         ),
@@ -996,7 +996,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
 
           // Name
           Text(widget.name,
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
                   color: c.text)),
@@ -1110,7 +1110,7 @@ class _EmptyFeed extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text('Your feed is empty',
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 28,
                   fontWeight: FontWeight.w600,
                   color: c.text)),
@@ -1133,7 +1133,7 @@ class _EmptyFeed extends StatelessWidget {
                         GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.brand,
-                  foregroundColor: Colors.white,
+                  foregroundColor: c.onPrimary,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 24, vertical: 14),
                   shape: RoundedRectangleBorder(

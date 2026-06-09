@@ -1,4 +1,5 @@
 import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 import 'package:booqly/widgets/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,8 +9,9 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: c.bg,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -24,7 +26,7 @@ class WelcomePage extends StatelessWidget {
                   child: Column(
                     children: [
                       const Spacer(),
-                      const _BookIllustration(),
+                      _BookIllustration(palette: c),
                       const SizedBox(height: 24),
                       RichText(
                         textAlign: TextAlign.center,
@@ -32,20 +34,24 @@ class WelcomePage extends StatelessWidget {
                           style: GoogleFonts.outfit(
                             fontSize: 28,
                             height: 1.3,
-                            color: AppColors.text,
+                            color: c.text,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
                           ),
-                          children: const [
-                            TextSpan(text: 'Every time I open a book,\nI open a '),
+                          children: [
+                            const TextSpan(
+                              text: 'Every time I open a book,\nI open a ',
+                            ),
                             TextSpan(
                               text: 'new window',
                               style: TextStyle(
-                                color: AppColors.brand,
+                                color: c.brand,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            TextSpan(text: ' onto a world\nI never knew existed.'),
+                            const TextSpan(
+                              text: ' onto a world\nI never knew existed.',
+                            ),
                           ],
                         ),
                       ),
@@ -55,7 +61,7 @@ class WelcomePage extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 15,
-                          color: AppColors.textSub,
+                          color: c.textSub,
                           height: 1.6,
                         ),
                       ),
@@ -65,10 +71,12 @@ class WelcomePage extends StatelessWidget {
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            AuthNavigationController.instance.requestLoginScreen();
+                            AuthNavigationController.instance
+                                .requestLoginScreen();
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brand,
+                            backgroundColor: c.brand,
+                            foregroundColor: c.onPrimary,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -79,7 +87,7 @@ class WelcomePage extends StatelessWidget {
                             style: GoogleFonts.outfit(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: c.onPrimary,
                               letterSpacing: 0.2,
                             ),
                           ),
@@ -99,7 +107,9 @@ class WelcomePage extends StatelessWidget {
 }
 
 class _BookIllustration extends StatelessWidget {
-  const _BookIllustration();
+  const _BookIllustration({required this.palette});
+
+  final AppPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -109,12 +119,12 @@ class _BookIllustration extends StatelessWidget {
         Container(
           width: 220,
           height: 220,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
               colors: [
-                Color(0x40EEF2FF),
-                Color(0x004F46E5),
+                palette.brandSoft.withValues(alpha: 0.65),
+                palette.brand.withValues(alpha: 0),
               ],
             ),
           ),

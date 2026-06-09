@@ -206,8 +206,8 @@ class _LibraryPageState extends State<LibraryPage>
               Navigator.pop(context);
               await _deleteSelected();
             },
-            style: FilledButton.styleFrom(backgroundColor: c.red),
-            child: Text('Remove', style: GoogleFonts.outfit(color: Colors.white)),
+            style: FilledButton.styleFrom(backgroundColor: c.error),
+            child: Text('Remove', style: GoogleFonts.outfit(color: c.onPrimary)),
           ),
         ],
       ),
@@ -243,7 +243,7 @@ class _LibraryPageState extends State<LibraryPage>
                             _isSelecting
                                 ? '${_selected.length} selected'
                                 : 'My Library',
-                            style: GoogleFonts.cormorantGaramond(
+                            style: GoogleFonts.figtree(
                               fontSize: 32,
                               fontWeight: FontWeight.w700,
                               color: c.text,
@@ -271,8 +271,8 @@ class _LibraryPageState extends State<LibraryPage>
                       const SizedBox(width: 8),
                       _HeaderBtn(
                         icon: Icons.delete_outline_rounded,
-                        color: c.red,
-                        bg: c.red.withValues(alpha: 0.1),
+                        color: c.error,
+                        bg: c.errorSoft,
                         onTap: () => _confirmDelete(c),
                       ),
                     ],
@@ -512,8 +512,8 @@ class _SuggestCard extends StatelessWidget {
                     height: 28,
                     decoration: BoxDecoration(
                         color: c.brand, shape: BoxShape.circle),
-                    child: const Icon(Icons.add_rounded,
-                        size: 16, color: Colors.white),
+                    child: Icon(Icons.add_rounded,
+                        size: 16, color: c.onPrimary),
                   ),
                 ),
               ),
@@ -578,10 +578,10 @@ class _BookTile extends StatelessWidget {
                   right: 6,
                   child: Container(
                     padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(
-                        color: Colors.white, shape: BoxShape.circle),
-                    child: const Icon(Icons.favorite_rounded,
-                        color: Colors.red, size: 12),
+                    decoration: BoxDecoration(
+                        color: c.surface, shape: BoxShape.circle),
+                    child: Icon(Icons.favorite_rounded,
+                        color: c.error, size: 12),
                   ),
                 );
               },
@@ -600,8 +600,8 @@ class _BookTile extends StatelessWidget {
                       padding: const EdgeInsets.all(4),
                       decoration:
                           BoxDecoration(color: c.brand, shape: BoxShape.circle),
-                      child: const Icon(Icons.check,
-                          size: 16, color: Colors.white),
+                      child: Icon(Icons.check,
+                          size: 16, color: c.onPrimary),
                     ),
                   ),
                 ),
@@ -640,32 +640,32 @@ class _BookTile extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: isThisBook
                               ? c.brand
-                              : Colors.black.withValues(alpha: 0.65),
+                              : c.overlay,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: isThisBook
                             ? Row(mainAxisSize: MainAxisSize.min, children: [
                                 Icon(Icons.stop_rounded,
-                                    size: 11, color: Colors.white),
+                                    size: 11, color: c.onPrimary),
                                 const SizedBox(width: 3),
                                 Text(session!.elapsedLabel,
                                     style: GoogleFonts.outfit(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
-                                        color: Colors.white,
+                                        color: c.onPrimary,
                                         fontFeatures: const [
                                           FontFeature.tabularFigures()
                                         ])),
                               ])
                             : Row(mainAxisSize: MainAxisSize.min, children: [
                                 Icon(Icons.play_arrow_rounded,
-                                    size: 11, color: Colors.white),
+                                    size: 11, color: c.onPrimary),
                                 const SizedBox(width: 2),
                                 Text('Read',
                                     style: GoogleFonts.outfit(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.white)),
+                                        color: c.onPrimary)),
                               ]),
                       ),
                     );

@@ -257,7 +257,7 @@ class _StopSessionSheetState extends State<_StopSessionSheet> {
                     children: [
                       Text(
                         'Session complete 📖',
-                        style: GoogleFonts.cormorantGaramond(
+                        style: GoogleFonts.figtree(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
                           color: c.text,
@@ -329,7 +329,7 @@ class _StopSessionSheetState extends State<_StopSessionSheet> {
               Text(
                 'Enter a page between 1 and ${widget.session.totalPages}',
                 style: GoogleFonts.outfit(
-                    fontSize: 12, color: c.red),
+                    fontSize: 12, color: c.error),
               ),
             ],
             const SizedBox(height: 24),
@@ -347,17 +347,17 @@ class _StopSessionSheetState extends State<_StopSessionSheet> {
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                            strokeWidth: 2, color: c.onPrimary))
                     : Text(
                         'Save session',
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: c.onPrimary,
                         ),
                       ),
               ),
@@ -460,7 +460,7 @@ class ActiveSessionBanner extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: c.onPrimary,
                       ),
                     ),
                   ),

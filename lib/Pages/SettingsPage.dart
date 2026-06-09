@@ -1,6 +1,8 @@
 import 'package:booqly/Pages/GoalsPage.dart';
 import 'package:booqly/Pages/ReadingWrappedPage.dart';
 import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
+import 'package:booqly/theme/theme_mode_picker.dart';
 import 'package:booqly/theme/theme_service.dart';
 import 'package:booqly/widgets/auth_gate.dart';
 import 'package:booqly/services/auth_service.dart';
@@ -130,24 +132,28 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _unlinkCalendar() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Unlink Google Calendar?',
-            style: GoogleFonts.outfit(color: AppColors.text)),
-        content: Text(
-          'Free-time reading reminders will stop until you link again.',
-          style: GoogleFonts.outfit(color: AppColors.textSub),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel', style: GoogleFonts.outfit())),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Unlink',
-                  style: GoogleFonts.outfit(color: Colors.redAccent))),
-        ],
-      ),
+      builder: (ctx) {
+        final c = ctx.colors;
+        return AlertDialog(
+          backgroundColor: c.surface,
+          title: Text('Unlink Google Calendar?',
+              style: GoogleFonts.outfit(color: c.text)),
+          content: Text(
+            'Free-time reading reminders will stop until you link again.',
+            style: GoogleFonts.outfit(color: c.textSub),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child:
+                    Text('Cancel', style: GoogleFonts.outfit(color: c.textSub))),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('Unlink',
+                    style: GoogleFonts.outfit(color: c.error))),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
 
@@ -204,55 +210,56 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final choice = await showModalBottomSheet<_SwitchAccountChoice>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(99),
+      builder: (ctx) {
+        final c = ctx.colors;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text('Switch account',
-                  style: GoogleFonts.cormorantGaramond(
-                      fontSize: 26, color: AppColors.text)),
-              const SizedBox(height: 8),
-              Text(
-                'Sign in with a different Booqly account. Your current session will end.',
-                style: GoogleFonts.outfit(
-                    fontSize: 13, height: 1.45, color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: const Icon(Icons.mail_outline_rounded,
-                    color: AppColors.brand),
-                title: Text('Sign in with email',
-                    style: GoogleFonts.outfit(color: AppColors.text)),
-                onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.email),
-              ),
-              ListTile(
-                leading: const Icon(Icons.g_mobiledata,
-                    color: AppColors.brand, size: 28),
-                title: Text('Continue with Google',
-                    style: GoogleFonts.outfit(color: AppColors.text)),
-                onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.google),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Text('Switch account',
+                    style: GoogleFonts.figtree(
+                        fontSize: 26, color: c.text)),
+                const SizedBox(height: 8),
+                Text(
+                  'Sign in with a different Booqly account. Your current session will end.',
+                  style: GoogleFonts.outfit(
+                      fontSize: 13, height: 1.45, color: c.textMuted),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Icon(Icons.mail_outline_rounded, color: c.brand),
+                  title: Text('Sign in with email',
+                      style: GoogleFonts.outfit(color: c.text)),
+                  onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.email),
+                ),
+                ListTile(
+                  leading: Icon(Icons.g_mobiledata, color: c.brand, size: 28),
+                  title: Text('Continue with Google',
+                      style: GoogleFonts.outfit(color: c.text)),
+                  onTap: () => Navigator.pop(ctx, _SwitchAccountChoice.google),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
     if (choice == null || !mounted) return;
 
@@ -310,24 +317,28 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Log out?',
-            style: GoogleFonts.outfit(color: AppColors.text)),
-        content: Text(
-          'You will need to sign in again to access your library.',
-          style: GoogleFonts.outfit(color: AppColors.textSub),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel', style: GoogleFonts.outfit())),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Log out',
-                  style: GoogleFonts.outfit(color: Colors.redAccent))),
-        ],
-      ),
+      builder: (ctx) {
+        final c = ctx.colors;
+        return AlertDialog(
+          backgroundColor: c.surface,
+          title: Text('Log out?',
+              style: GoogleFonts.outfit(color: c.text)),
+          content: Text(
+            'You will need to sign in again to access your library.',
+            style: GoogleFonts.outfit(color: c.textSub),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child:
+                    Text('Cancel', style: GoogleFonts.outfit(color: c.textSub))),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('Log out',
+                    style: GoogleFonts.outfit(color: c.error))),
+          ],
+        );
+      },
     );
     if (confirm != true) return;
 
@@ -362,7 +373,7 @@ class _SettingsPageState extends State<SettingsPage> {
         automaticallyImplyLeading: !widget.embeddedInTab,
         title: Text(
           'Profile & Settings',
-          style: GoogleFonts.cormorantGaramond(
+          style: GoogleFonts.figtree(
             fontSize: 26,
             fontWeight: FontWeight.w600,
             color: c.text,
@@ -449,27 +460,69 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 28),
 
-                // ── Appearance (dark mode — first thing users look for) ──
-                _sectionLabel('Appearance', c),
+                // ── Theme ────────────────────────────────────────────────
+                _sectionLabel('Theme', c),
                 const SizedBox(height: 10),
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: ThemeService.instance.notifier,
-                  builder: (ctx, mode, child) {
-                    final isDark = mode == ThemeMode.dark;
-                    return _SettingsTileC(
-                      icon: isDark
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      title: 'Dark mode',
-                      subtitle: isDark ? 'Dark theme active' : 'Light theme active',
-                      trailing: Switch.adaptive(
-                        value: isDark,
-                        onChanged: (v) => ThemeService.instance
-                            .setMode(v ? ThemeMode.dark : ThemeMode.light),
-                        activeThumbColor: c.brand,
-                        activeTrackColor: c.brandMid,
+                  builder: (ctx, mode, _) {
+                    final themeService = ThemeService.instance;
+                    return Material(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: c.brandSoft,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    themeService.iconFor(mode),
+                                    color: c.brand,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Theme',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: c.text,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        themeService.descriptionFor(mode),
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          color: c.textMuted,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            const ThemeModePicker(),
+                          ],
+                        ),
                       ),
-                      palette: c,
                     );
                   },
                 ),
@@ -530,13 +583,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: 'Sign out of your Booqly account',
                   palette: c,
                   trailing: _loggingOut
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.redAccent))
+                              strokeWidth: 2, color: c.error))
                       : Icon(Icons.chevron_right_rounded,
-                          color: Colors.redAccent.withValues(alpha: 0.9)),
+                          color: c.error.withValues(alpha: 0.9)),
                   onTap: _loggingOut ? null : _logout,
                 ),
               ],

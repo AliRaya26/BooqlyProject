@@ -83,7 +83,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     children: [
                       Text(
                         'Discover',
-                        style: GoogleFonts.cormorantGaramond(
+                        style: GoogleFonts.figtree(
                           fontSize: 32,
                           fontWeight: FontWeight.w700,
                           color: c.text,
@@ -187,7 +187,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                     color: active
-                                        ? Colors.white
+                                        ? c.onPrimary
                                         : c.textSub,
                                   ),
                                 ),

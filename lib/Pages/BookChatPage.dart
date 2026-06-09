@@ -186,7 +186,7 @@ class _BookChatPageState extends State<BookChatPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Could not load image: $e',
             style: GoogleFonts.outfit()),
-        backgroundColor: AppColors.of(context).red,
+        backgroundColor: AppColors.of(context).error,
         behavior: SnackBarBehavior.floating,
       ));
     }
@@ -523,12 +523,12 @@ class _BookChatPageState extends State<BookChatPage> {
                     width: 44,
                     height: 44,
                     child: _sending
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
+                        ? Padding(
+                            padding: const EdgeInsets.all(12),
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2, color: c.onPrimary),
                           )
-                        : const Icon(Icons.send_rounded, color: Colors.white),
+                        : Icon(Icons.send_rounded, color: c.onPrimary),
                   ),
                 ),
               ),
@@ -561,7 +561,7 @@ class _MessageBubble extends StatelessWidget {
           color: isUser
               ? c.brand
               : message.isError
-                  ? c.red.withValues(alpha: 0.12)
+                  ? c.errorSoft
                   : c.surfaceAlt,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
@@ -573,7 +573,7 @@ class _MessageBubble extends StatelessWidget {
               ? null
               : Border.all(
                   color: message.isError
-                      ? c.red.withValues(alpha: 0.3)
+                      ? c.error.withValues(alpha: 0.3)
                       : c.border),
         ),
         child: Column(
@@ -593,7 +593,7 @@ class _MessageBubble extends StatelessWidget {
               style: GoogleFonts.outfit(
                   fontSize: 14,
                   height: 1.45,
-                  color: isUser ? Colors.white : c.text),
+                  color: isUser ? c.onPrimary : c.text),
             ),
           ],
         ),
@@ -709,8 +709,8 @@ class _InvalidApiKeyState extends StatelessWidget {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-                color: c.red.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(Icons.key_off_rounded, size: 34, color: c.red),
+                color: c.errorSoft, shape: BoxShape.circle),
+            child: Icon(Icons.key_off_rounded, size: 34, color: c.error),
           ),
           const SizedBox(height: 20),
           Text('API key not valid',
@@ -763,7 +763,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline_rounded, color: c.red, size: 40),
+          Icon(Icons.error_outline_rounded, color: c.error, size: 40),
           const SizedBox(height: 12),
           Text('Could not start the assistant',
               style: GoogleFonts.outfit(

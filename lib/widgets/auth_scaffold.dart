@@ -1,6 +1,4 @@
-import 'dart:math' as math;
-
-import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 import 'package:flutter/material.dart';
 
 /// Shared auth screen shell: tablet-friendly width, keyboard insets, tap-to-dismiss.
@@ -16,17 +14,13 @@ class AuthScaffold extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBack;
 
-  static const bg = AppColors.bg;
-
-  // Reserve enough vertical space for the inner header padding (24 top + 24
-  // bottom). Any value above 0 is fine; this just lets the scroll view fill
-  // the viewport when content is short.
   static const _verticalChrome = 48.0;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: c.bg,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: GestureDetector(
@@ -34,16 +28,9 @@ class AuthScaffold extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Scaffold(resizeToAvoidBottomInset: true) already removes the
-              // keyboard height from constraints.maxHeight. Earlier versions
-              // subtracted viewInsets.bottom again, which produced a negative
-              // minHeight (-2.0) when the IME opened in landscape and crashed
-              // every frame with "BoxConstraints has a negative minimum
-              // height". Use math.max + isFinite to guarantee a valid value
-              // regardless of the parent's constraints.
               final maxH = constraints.maxHeight;
               final double minHeight = (maxH.isFinite)
-                  ? math.max(0.0, maxH - _verticalChrome)
+                  ? (maxH - _verticalChrome).clamp(0.0, double.infinity)
                   : 0.0;
               final maxWidth = constraints.maxWidth > 600 ? 440.0 : 520.0;
               return SingleChildScrollView(
@@ -70,8 +57,9 @@ class AuthScaffold extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: IconButton(
                               icon: const Icon(Icons.arrow_back_rounded),
-                              color: AppColors.brand,
-                              onPressed: onBack ?? () => Navigator.maybePop(context),
+                              color: c.brand,
+                              onPressed:
+                                  onBack ?? () => Navigator.maybePop(context),
                             ),
                           ),
                         child,
@@ -101,33 +89,37 @@ class AuthPrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
 
-  static const _gold = AppColors.brand;
-
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _gold,
-          disabledBackgroundColor: _gold.withValues(alpha: 0.45),
+          backgroundColor: c.brand,
+          foregroundColor: c.onPrimary,
+          disabledBackgroundColor: c.brand.withValues(alpha: 0.45),
+          disabledForegroundColor: c.onPrimary.withValues(alpha: 0.7),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 height: 22,
                 width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: c.onPrimary,
+                ),
               )
             : Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: c.onPrimary,
                 ),
               ),
       ),

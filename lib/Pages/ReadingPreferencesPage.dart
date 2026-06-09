@@ -4,6 +4,8 @@ import 'package:booqly/models/reading_preferences_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,11 +19,6 @@ class ReadingPreferencesPage extends StatefulWidget {
 }
 
 class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
-  static const _bg = Color(0xFF0E0C0A);
-  static const _gold = Color(0xFFD4A96A);
-  static const _ink = Color(0xFFF5F0E8);
-  static const _muted = Color(0xFF888580);
-  static const _surf = Color(0xFF1A1713);
   static const _minGenres = 3;
   static const _totalSteps = 3;
 
@@ -120,24 +117,27 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: _surf,
-          title: Text(
-            'Not signed in',
-            style: GoogleFonts.outfit(color: _ink, fontWeight: FontWeight.w600),
-          ),
-          content: Text(
-            'Sign up or sign in first. Your choices are saved to Firestore '
-            'under preferences/your-user-id.',
-            style: GoogleFonts.outfit(color: _muted, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('OK', style: GoogleFonts.outfit(color: _gold)),
+        builder: (ctx) {
+          final c = ctx.colors;
+          return AlertDialog(
+            backgroundColor: c.surface,
+            title: Text(
+              'Not signed in',
+              style: GoogleFonts.outfit(color: c.text, fontWeight: FontWeight.w600),
             ),
-          ],
-        ),
+            content: Text(
+              'Sign up or sign in first. Your choices are saved to Firestore '
+              'under preferences/your-user-id.',
+              style: GoogleFonts.outfit(color: c.textMuted, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('OK', style: GoogleFonts.outfit(color: c.brand)),
+              ),
+            ],
+          );
+        },
       );
       return;
     }
@@ -150,25 +150,28 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
       if (!result.ok) {
         await showDialog<void>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: _surf,
-            title: Text(
-              'Could not save',
-              style: GoogleFonts.outfit(color: _ink, fontWeight: FontWeight.w600),
-            ),
-            content: Text(
-              result.error ??
-                  'Firestore rejected the save. In Firebase Console → Firestore → Rules, '
-                  'publish the rules from firestore.rules in your project folder.',
-              style: GoogleFonts.outfit(color: _muted, height: 1.5, fontSize: 13),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text('OK', style: GoogleFonts.outfit(color: _gold)),
+          builder: (ctx) {
+            final c = ctx.colors;
+            return AlertDialog(
+              backgroundColor: c.surface,
+              title: Text(
+                'Could not save',
+                style: GoogleFonts.outfit(color: c.text, fontWeight: FontWeight.w600),
               ),
-            ],
-          ),
+              content: Text(
+                result.error ??
+                    'Firestore rejected the save. In Firebase Console → Firestore → Rules, '
+                    'publish the rules from firestore.rules in your project folder.',
+                style: GoogleFonts.outfit(color: c.textMuted, height: 1.5, fontSize: 13),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('OK', style: GoogleFonts.outfit(color: c.brand)),
+                ),
+              ],
+            );
+          },
         );
         return;
       }
@@ -232,12 +235,14 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: c.bg,
       body: SafeArea(
         child: _loadingCatalog
-            ? const Center(
-                child: CircularProgressIndicator(color: _gold),
+            ? Center(
+                child: CircularProgressIndicator(color: c.brand),
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -263,6 +268,8 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   }
 
   Widget _buildHeader() {
+    final c = context.colors;
+
     // Step 0 = Welcome (no step label shown, no back button)
     if (_step == 0) return const SizedBox.shrink();
 
@@ -286,29 +293,29 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
             children: [
               IconButton(
                 onPressed: () => _goToStep(_step - 1),
-                icon: const Icon(Icons.arrow_back_rounded, color: _muted),
+                icon: Icon(Icons.arrow_back_rounded, color: c.textMuted),
               ),
               const Spacer(),
               Text(
                 'Step $_step of ${_totalSteps - 1}',
-                style: GoogleFonts.outfit(color: _muted, fontSize: 13),
+                style: GoogleFonts.outfit(color: c.textMuted, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             titles[_step],
-            style: GoogleFonts.cormorantGaramond(
+            style: GoogleFonts.figtree(
               fontSize: 36,
               fontWeight: FontWeight.w600,
-              color: _gold,
+              color: c.brand,
               height: 1.1,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             subtitles[_step],
-            style: GoogleFonts.outfit(fontSize: 14, color: _muted, height: 1.5),
+            style: GoogleFonts.outfit(fontSize: 14, color: c.textMuted, height: 1.5),
           ),
           const SizedBox(height: 16),
           _StepIndicator(current: _step, total: _totalSteps),
@@ -347,6 +354,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   }
 
   Widget _buildWelcomeStep() {
+    final c = context.colors;
     final name = _userName;
     return Center(
       child: SingleChildScrollView(
@@ -360,8 +368,8 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF221C12),
-                border: Border.all(color: _gold.withValues(alpha: 0.5), width: 2),
+                color: c.surfaceAlt,
+                border: Border.all(color: c.brand.withValues(alpha: 0.5), width: 2),
               ),
               alignment: Alignment.center,
               child: const Text('📚', style: TextStyle(fontSize: 48)),
@@ -372,10 +380,10 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                   ? 'Welcome to Booqly,\n$name!'
                   : 'Welcome to Booqly!',
               textAlign: TextAlign.center,
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                 fontSize: 42,
                 fontWeight: FontWeight.w600,
-                color: _gold,
+                color: c.brand,
                 height: 1.15,
               ),
             ),
@@ -386,7 +394,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 16,
-                color: _muted,
+                color: c.textMuted,
                 height: 1.65,
               ),
             ),
@@ -416,43 +424,45 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   }
 
   Widget _buildFirstBookStep() {
+    final c = context.colors;
+
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
           child: TextField(
             controller: _searchCtrl,
-            style: GoogleFonts.outfit(color: _ink, fontSize: 15),
+            style: GoogleFonts.outfit(color: c.text, fontSize: 15),
             onChanged: _searchBooks,
             decoration: InputDecoration(
               hintText: 'Search by title or author…',
-              hintStyle: GoogleFonts.outfit(color: _muted),
-              prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+              hintStyle: GoogleFonts.outfit(color: c.textMuted),
+              prefixIcon: Icon(Icons.search_rounded, color: c.textMuted),
               suffixIcon: _searchLoading
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
                       child: SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: _gold)),
+                              strokeWidth: 2, color: c.brand)),
                     )
                   : null,
               filled: true,
-              fillColor: const Color(0xFF1A1713),
+              fillColor: c.surface,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF2A2520)),
+                borderSide: BorderSide(color: c.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFF2A2520)),
+                borderSide: BorderSide(color: c.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _gold, width: 1.5),
+                borderSide: BorderSide(color: c.brand, width: 1.5),
               ),
             ),
           ),
@@ -463,14 +473,14 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                   child: Text(
                     'Type a book title or author name\nto search the catalogue.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(color: _muted, fontSize: 14, height: 1.6),
+                    style: GoogleFonts.outfit(color: c.textMuted, fontSize: 14, height: 1.6),
                   ),
                 )
               : _searchResults.isEmpty
                   ? Center(
                       child: Text(
                         'No results found.',
-                        style: GoogleFonts.outfit(color: _muted, fontSize: 14),
+                        style: GoogleFonts.outfit(color: c.textMuted, fontSize: 14),
                       ),
                     )
                   : ListView.builder(
@@ -489,14 +499,10 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                               duration: const Duration(milliseconds: 200),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: picked
-                                    ? const Color(0xFF221C12)
-                                    : const Color(0xFF161310),
+                                color: picked ? c.brandSoft : c.surfaceAlt,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: picked
-                                      ? _gold
-                                      : const Color(0xFF2A2520),
+                                  color: picked ? c.brand : c.border,
                                 ),
                               ),
                               child: Row(
@@ -525,7 +531,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                                           style: GoogleFonts.outfit(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: _ink,
+                                            color: c.text,
                                           ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
@@ -534,7 +540,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                                         Text(
                                           book.author,
                                           style: GoogleFonts.outfit(
-                                              fontSize: 12, color: _muted),
+                                              fontSize: 12, color: c.textMuted),
                                         ),
                                       ],
                                     ),
@@ -545,18 +551,16 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                                     height: 28,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: picked
-                                          ? _gold
-                                          : Colors.transparent,
+                                      color: picked ? c.brand : Colors.transparent,
                                       border: Border.all(
-                                        color: picked ? _gold : _muted,
+                                        color: picked ? c.brand : c.textMuted,
                                         width: 1.5,
                                       ),
                                     ),
                                     child: picked
-                                        ? const Icon(Icons.check_rounded,
+                                        ? Icon(Icons.check_rounded,
                                             size: 16,
-                                            color: Color(0xFF0E0C0A))
+                                            color: c.onPrimary)
                                         : null,
                                   ),
                                 ],
@@ -572,6 +576,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
   }
 
   Widget _buildBottomBar() {
+    final c = context.colors;
     final bool enabled;
     final String label;
 
@@ -599,7 +604,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
               '${_selectedGenres.length} selected · $_minGenres minimum',
               style: GoogleFonts.outfit(
                 fontSize: 13,
-                color: _canContinueGenres ? _gold : _muted,
+                color: _canContinueGenres ? c.brand : c.textMuted,
               ),
             ),
           const SizedBox(height: 12),
@@ -608,10 +613,10 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
             child: ElevatedButton(
               onPressed: !enabled ? null : () async => await _finish(),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _gold,
-                disabledBackgroundColor: _surf,
-                foregroundColor: _bg,
-                disabledForegroundColor: _muted,
+                backgroundColor: c.brand,
+                disabledBackgroundColor: c.surface,
+                foregroundColor: c.onPrimary,
+                disabledForegroundColor: c.textMuted,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -619,10 +624,10 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
                 elevation: 0,
               ),
               child: (_saving || _addingBook)
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _bg),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: c.onPrimary),
                     )
                   : Text(
                       label,
@@ -642,7 +647,7 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
               },
               child: Text(
                 'Skip for now',
-                style: GoogleFonts.outfit(color: _muted, fontSize: 14),
+                style: GoogleFonts.outfit(color: c.textMuted, fontSize: 14),
               ),
             ),
           ],
@@ -660,6 +665,8 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Row(
       children: List.generate(total, (i) {
         final active = i <= current;
@@ -668,9 +675,7 @@ class _StepIndicator extends StatelessWidget {
             margin: EdgeInsets.only(right: i < total - 1 ? 8 : 0),
             height: 3,
             decoration: BoxDecoration(
-              color: active
-                  ? const Color(0xFFD4A96A)
-                  : const Color(0xFF2A2520),
+              color: active ? c.brand : c.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -722,11 +727,9 @@ class _GenreListTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const _ink = Color(0xFFF5F0E8);
-  static const _muted = Color(0xFF888580);
-
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final palette = _GenrePalette.forGenre(option.id);
     final accent = palette.accent;
     final glow = palette.glow;
@@ -741,9 +744,9 @@ class _GenreListTile extends StatelessWidget {
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: selected ? glow.withValues(alpha: 0.95) : const Color(0xFF161310),
+            color: selected ? glow.withValues(alpha: 0.95) : c.surfaceAlt,
             border: Border.all(
-              color: selected ? accent : const Color(0xFF2A2520),
+              color: selected ? accent : c.border,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -804,7 +807,7 @@ class _GenreListTile extends StatelessWidget {
                           style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: _ink,
+                            color: c.text,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -820,15 +823,15 @@ class _GenreListTile extends StatelessWidget {
                               ? accent
                               : Colors.transparent,
                           border: Border.all(
-                            color: selected ? accent : _muted.withValues(alpha: 0.5),
+                            color: selected ? accent : c.textMuted.withValues(alpha: 0.5),
                             width: 1.5,
                           ),
                         ),
                         child: selected
-                            ? const Icon(
+                            ? Icon(
                                 Icons.check_rounded,
                                 size: 16,
-                                color: Color(0xFF0E0C0A),
+                                color: c.onPrimary,
                               )
                             : null,
                       ),
@@ -856,12 +859,15 @@ class _WelcomeFeatureTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161310),
+        color: c.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2A2520)),
+        border: Border.all(color: c.border),
+        boxShadow: cardShadow(context),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,7 +883,7 @@ class _WelcomeFeatureTile extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFFF5F0E8),
+                    color: c.text,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -885,7 +891,7 @@ class _WelcomeFeatureTile extends StatelessWidget {
                   subtitle,
                   style: GoogleFonts.outfit(
                     fontSize: 12,
-                    color: const Color(0xFF888580),
+                    color: c.textMuted,
                     height: 1.45,
                   ),
                 ),
@@ -904,15 +910,17 @@ class _BookPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Container(
       width: 46,
       height: 64,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1713),
+        color: c.surface,
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,
-      child: const Icon(Icons.book_rounded, color: Color(0xFF888580), size: 22),
+      child: Icon(Icons.book_rounded, color: c.textMuted, size: 22),
     );
   }
 }

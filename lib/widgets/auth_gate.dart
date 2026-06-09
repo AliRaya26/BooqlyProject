@@ -8,6 +8,7 @@ import 'package:booqly/Pages/ReadingPreferencesPage.dart';
 import 'package:booqly/Pages/WelcomePage.dart';
 import 'package:booqly/services/preferences_service.dart';
 import 'package:booqly/services/reading_motivation_service.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 
 /// Chooses the first screen from Firebase Auth session (stay signed in) and
 /// optional [AuthNavigationController.showLoginScreen] after sign-out / switch.
@@ -115,18 +116,19 @@ class AuthLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Scaffold(
-      backgroundColor: const Color(0xFF0E0C0A),
+      backgroundColor: c.bg,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(color: Color(0xFFD4A96A)),
+            CircularProgressIndicator(color: c.brand),
             const SizedBox(height: 16),
             Text(
               'Opening Booqly…',
               style: GoogleFonts.outfit(
-                color: const Color(0xFF888580),
+                color: c.textMuted,
                 fontSize: 14,
               ),
             ),

@@ -264,7 +264,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Add a book',
-                      style: GoogleFonts.cormorantGaramond(
+                      style: GoogleFonts.figtree(
                         fontSize: 28, fontWeight: FontWeight.w700,
                         color: c.text, height: 1.1)),
                     Text('Manual entry',
@@ -369,23 +369,23 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: Colors.black.withValues(alpha: 0.3),
+                        color: c.scrim,
                       ),
                     ),
                     Positioned(
                       top: 10, right: 10,
                       child: Row(
                         children: [
-                          _overlayBtn(Icons.edit_rounded, _pickCover),
+                          _overlayBtn(c, Icons.edit_rounded, _pickCover),
                           const SizedBox(width: 8),
-                          _overlayBtn(Icons.close_rounded,
+                          _overlayBtn(c, Icons.close_rounded,
                               () => setState(() => _coverImage = null)),
                         ],
                       ),
                     ),
-                    const Center(
+                    Center(
                       child: Icon(Icons.check_circle_rounded,
-                          color: Colors.white70, size: 32),
+                          color: c.onPrimary.withValues(alpha: 0.7), size: 32),
                     ),
                   ],
                 )
@@ -417,15 +417,15 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
     );
   }
 
-  Widget _overlayBtn(IconData icon, VoidCallback onTap) {
+  Widget _overlayBtn(AppPalette c, IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
+            color: c.overlay,
             shape: BoxShape.circle),
-        child: Icon(icon, color: Colors.white, size: 16),
+        child: Icon(icon, color: c.onPrimary, size: 16),
       ),
     );
   }
@@ -601,7 +601,7 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
                 child: Text('Choose PDF',
                     style: GoogleFonts.outfit(
                         fontSize: 13, fontWeight: FontWeight.w600,
-                        color: Colors.white)),
+                        color: c.onPrimary)),
               ),
             ],
           ),
@@ -688,22 +688,22 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     width: 18, height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2, color: c.onPrimary),
                   ),
                   const SizedBox(width: 10),
                   Text(label,
                       style: GoogleFonts.outfit(
                           fontSize: 14, fontWeight: FontWeight.w600,
-                          color: Colors.white)),
+                          color: c.onPrimary)),
                 ],
               )
             : Text('Add to Library',
                 style: GoogleFonts.outfit(
                     fontSize: 15, fontWeight: FontWeight.w600,
-                    color: Colors.white)),
+                    color: c.onPrimary)),
       ),
     );
   }

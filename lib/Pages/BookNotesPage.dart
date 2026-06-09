@@ -82,10 +82,10 @@ class BookNotesPage extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddSheet(context, book.id),
         backgroundColor: c.brand,
-        icon: const Icon(Icons.edit_note_rounded, color: Colors.white),
+        icon: Icon(Icons.edit_note_rounded, color: c.onPrimary),
         label: Text('Add note',
             style: GoogleFonts.outfit(
-                color: Colors.white, fontWeight: FontWeight.w600)),
+                color: c.onPrimary, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -118,7 +118,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'No notes yet',
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 28, fontWeight: FontWeight.w600, color: c.text),
             ),
             const SizedBox(height: 12),
@@ -136,7 +136,7 @@ class _EmptyState extends StatelessWidget {
                   style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.brand,
-                foregroundColor: Colors.white,
+                foregroundColor: c.onPrimary,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -163,7 +163,7 @@ class _NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isQuote = note.type == NoteType.quote;
-    final accentColor = isQuote ? c.brand : const Color(0xFF5B8DD9);
+    final accentColor = isQuote ? c.brand : c.quoteAccent;
     final dateLabel =
         DateFormat('MMM d, yyyy').format(note.createdAt.toLocal());
 
@@ -277,10 +277,10 @@ class _NoteCard extends StatelessWidget {
                       value: 'delete',
                       child: Row(children: [
                         Icon(Icons.delete_outline_rounded,
-                            color: c.red, size: 18),
+                            color: c.error, size: 18),
                         const SizedBox(width: 10),
                         Text('Delete',
-                            style: GoogleFonts.outfit(color: c.red)),
+                            style: GoogleFonts.outfit(color: c.error)),
                       ]),
                     ),
                   ],
@@ -296,7 +296,7 @@ class _NoteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('"',
-                          style: GoogleFonts.cormorantGaramond(
+                          style: GoogleFonts.figtree(
                             fontSize: 40,
                             color: c.brand.withValues(alpha: 0.4),
                             height: 0.8,
@@ -305,7 +305,7 @@ class _NoteCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           note.text,
-                          style: GoogleFonts.cormorantGaramond(
+                          style: GoogleFonts.figtree(
                             fontSize: 17,
                             fontStyle: FontStyle.italic,
                             color: c.text,
@@ -364,7 +364,7 @@ void _confirmDelete(
             NotesService().deleteNote(bookId: bookId, noteId: note.id);
           },
           child:
-              Text('Delete', style: GoogleFonts.outfit(color: c.red)),
+              Text('Delete', style: GoogleFonts.outfit(color: c.error)),
         ),
       ],
     ),
@@ -445,7 +445,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
           SnackBar(
             content: Text('Failed to save note: $e',
                 style: GoogleFonts.outfit()),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.of(context).error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -482,7 +482,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
             const SizedBox(height: 20),
             Text(
               widget.existing != null ? 'Edit note' : 'New note',
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
                   color: c.text),
@@ -496,7 +496,7 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
                   label: 'Note',
                   icon: Icons.sticky_note_2_rounded,
                   selected: _type == NoteType.note,
-                  color: const Color(0xFF5B8DD9),
+                  color: c.quoteAccent,
                   onTap: () => setState(() => _type = NoteType.note),
                   c: c,
                 ),
@@ -584,16 +584,16 @@ class _AddNoteSheetState extends State<_AddNoteSheet> {
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                            strokeWidth: 2, color: c.onPrimary))
                     : Text('Save',
                         style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white)),
+                            color: c.onPrimary)),
               ),
             ),
           ],

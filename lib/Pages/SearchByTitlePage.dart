@@ -2,40 +2,28 @@ import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/services/preferences_service.dart';
+import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 
-// ─────────────────────────────────────────────────────────────
-// COLORS
-// ─────────────────────────────────────────────────────────────
-
-class AppColors {
-  static const bg = Color(0xFF0E0C0A);
-  static const surface = Color(0xFF1A1713);
-
-  static const border = Color(0xFF2A2520);
-
-  static const textPrimary = Color(0xFFF5F0E8);
-  static const textSecondary = Color(0xFFE0D8CC);
-  static const textMuted = Color(0xFF888580);
-
-  static const gold = Color(0xFFD4A96A);
-}
-
 Widget buildCover(
+  BuildContext context,
   String url, {
   double width = double.infinity,
   double height = double.infinity,
 }) {
+  final c = context.colors;
+
   if (url.trim().isEmpty) {
     return Container(
       width: width,
       height: height,
-      color: AppColors.surface,
-      child: const Icon(Icons.menu_book_rounded),
+      color: c.surface,
+      child: Icon(Icons.menu_book_rounded, color: c.textMuted),
     );
   }
 
@@ -49,8 +37,8 @@ Widget buildCover(
         return Container(
           width: width,
           height: height,
-          color: AppColors.surface,
-          child: const Icon(Icons.broken_image),
+          color: c.surface,
+          child: Icon(Icons.broken_image, color: c.textMuted),
         );
       },
     );
@@ -60,8 +48,8 @@ Widget buildCover(
     return Container(
       width: width,
       height: height,
-      color: AppColors.surface,
-      child: const Icon(Icons.menu_book_rounded),
+      color: c.surface,
+      child: Icon(Icons.menu_book_rounded, color: c.textMuted),
     );
   }
 
@@ -74,8 +62,8 @@ Widget buildCover(
       return Container(
         width: width,
         height: height,
-        color: AppColors.surface,
-        child: const Icon(Icons.broken_image),
+        color: c.surface,
+        child: Icon(Icons.broken_image, color: c.textMuted),
       );
     },
   );
@@ -204,8 +192,10 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: c.bg,
 
       body: SafeArea(
         child: Column(
@@ -218,11 +208,11 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 
             Expanded(
               child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.gold),
+                  ? Center(
+                      child: CircularProgressIndicator(color: c.brand),
                     )
                   : _filtered.isEmpty
-                  ? _buildEmptyState()
+                  ? _buildEmptyState(context)
                   : ListView.builder(
                       padding: const EdgeInsets.only(bottom: 40),
                       itemCount:
@@ -262,6 +252,8 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
   // ───────────────────────────────────────────────────────────
 
   Widget _buildTopBar(BuildContext context) {
+    final c = context.colors;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
 
@@ -280,14 +272,14 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
                   height: 32,
 
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: c.surface,
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: c.border),
                   ),
 
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_left_rounded,
-                    color: AppColors.textMuted,
+                    color: c.textMuted,
                     size: 20,
                   ),
                 ),
@@ -298,11 +290,11 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
               Text(
                 'Search a book',
 
-                style: GoogleFonts.cormorantGaramond(
+                style: GoogleFonts.figtree(
                   fontSize: 26,
                   fontWeight: FontWeight.w600,
                   fontStyle: FontStyle.italic,
-                  color: AppColors.gold,
+                  color: c.brand,
                 ),
               ),
             ],
@@ -313,19 +305,20 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
           // SEARCH FIELD
           Container(
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: c.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: c.border),
+              boxShadow: cardShadow(context),
             ),
 
             child: Row(
               children: [
                 const SizedBox(width: 16),
 
-                const Icon(
+                Icon(
                   Icons.search_rounded,
                   size: 18,
-                  color: AppColors.textMuted,
+                  color: c.textMuted,
                 ),
 
                 const SizedBox(width: 10),
@@ -342,7 +335,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 
                     style: GoogleFonts.outfit(
                       fontSize: 14,
-                      color: AppColors.textPrimary,
+                      color: c.text,
                     ),
 
                     decoration: InputDecoration(
@@ -350,7 +343,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
 
                       hintStyle: GoogleFonts.outfit(
                         fontSize: 14,
-                        color: AppColors.textMuted,
+                        color: c.textMuted,
                       ),
 
                       border: InputBorder.none,
@@ -371,13 +364,13 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
                       });
                     },
 
-                    child: const Padding(
-                      padding: EdgeInsets.only(right: 14),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 14),
 
                       child: Icon(
                         Icons.close_rounded,
                         size: 16,
-                        color: AppColors.textMuted,
+                        color: c.textMuted,
                       ),
                     ),
                   ),
@@ -393,20 +386,22 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
   // EMPTY STATE
   // ───────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
+    final c = context.colors;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
 
         children: [
-          Icon(Icons.search_off_rounded, size: 48, color: AppColors.textMuted),
+          Icon(Icons.search_off_rounded, size: 48, color: c.textMuted),
 
           const SizedBox(height: 12),
 
           Text(
             'No books found',
 
-            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMuted),
+            style: GoogleFonts.outfit(fontSize: 14, color: c.textMuted),
           ),
 
           const SizedBox(height: 6),
@@ -414,7 +409,7 @@ class _SearchByTitlePageState extends State<SearchByTitlePage> {
           Text(
             'Try a different title or author',
 
-            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textMuted),
+            style: GoogleFonts.outfit(fontSize: 12, color: c.textMuted),
           ),
         ],
       ),
@@ -433,27 +428,30 @@ class _PickedForYouBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2C2210), Color(0xFF1A1713)],
+          gradient: LinearGradient(
+            colors: [c.brandSoft, c.surface],
           ),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Color(0x33D4A96A)),
+          border: Border.all(color: c.brand.withValues(alpha: 0.2)),
+          boxShadow: cardShadow(context),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Picked for you',
-              style: GoogleFonts.cormorantGaramond(
+              style: GoogleFonts.figtree(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
-                color: AppColors.gold,
+                color: c.brand,
               ),
             ),
             const SizedBox(height: 6),
@@ -461,7 +459,7 @@ class _PickedForYouBanner extends StatelessWidget {
               'Based on your tastes: ${genres.take(4).join(', ')}${genres.length > 4 ? '…' : ''}',
               style: GoogleFonts.outfit(
                 fontSize: 13,
-                color: AppColors.textMuted,
+                color: c.textMuted,
                 height: 1.4,
               ),
             ),
@@ -480,6 +478,8 @@ class _CategorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
 
@@ -501,7 +501,7 @@ class _CategorySection extends StatelessWidget {
                     style: GoogleFonts.amiko(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: c.text,
                     ),
                   ),
                   if (isPreferred) ...[
@@ -512,14 +512,14 @@ class _CategorySection extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0x1FD4A96A),
+                        color: c.brand.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         'Your pick',
                         style: GoogleFonts.outfit(
                           fontSize: 10,
-                          color: AppColors.gold,
+                          color: c.brand,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -533,7 +533,7 @@ class _CategorySection extends StatelessWidget {
 
                 style: GoogleFonts.outfit(
                   fontSize: 12,
-                  color: AppColors.gold,
+                  color: c.brand,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -577,6 +577,8 @@ class _BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -599,7 +601,7 @@ class _BookCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
 
-                child: buildCover(book.coverUrl, width: 120, height: 170),
+                child: buildCover(context, book.coverUrl, width: 120, height: 170),
               ),
             ),
 
@@ -615,7 +617,7 @@ class _BookCard extends StatelessWidget {
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: c.textSub,
                 height: 1.3,
               ),
             ),
@@ -631,7 +633,7 @@ class _BookCard extends StatelessWidget {
 
               style: GoogleFonts.outfit(
                 fontSize: 10,
-                color: AppColors.textMuted,
+                color: c.textMuted,
               ),
             ),
           ],

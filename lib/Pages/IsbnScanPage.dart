@@ -132,7 +132,7 @@ class _IsbnScanPageState extends State<IsbnScanPage> {
         setState(() => _saved = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Failed to save: $e', style: GoogleFonts.outfit()),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.of(context).error,
           behavior: SnackBarBehavior.floating,
         ));
       }
@@ -161,7 +161,7 @@ class _IsbnScanPageState extends State<IsbnScanPage> {
             IconButton(
               icon: Icon(
                 _torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                color: _torchOn ? Colors.amber : Colors.white,
+                color: _torchOn ? c.warning : Colors.white,
               ),
               onPressed: () async {
                 await _scanner.toggleTorch();
@@ -191,7 +191,7 @@ class _IsbnScanPageState extends State<IsbnScanPage> {
 
         // Overlay with cutout
         CustomPaint(
-          painter: _ScanOverlayPainter(),
+          painter: _ScanOverlayPainter(brandColor: c.brand),
           child: const SizedBox.expand(),
         ),
 
@@ -281,6 +281,9 @@ class _IsbnScanPageState extends State<IsbnScanPage> {
 // ── Scan overlay ──────────────────────────────────────────────────────────────
 
 class _ScanOverlayPainter extends CustomPainter {
+  const _ScanOverlayPainter({required this.brandColor});
+  final Color brandColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     const cutW = 280.0;
@@ -309,7 +312,7 @@ class _ScanOverlayPainter extends CustomPainter {
     // Corner accents
     const accentRadius = 12.0;
     final accent = Paint()
-      ..color = const Color(0xFFD4A96A)
+      ..color = brandColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round;
@@ -331,7 +334,7 @@ class _ScanOverlayPainter extends CustomPainter {
 
     // Scan line
     final linePaint = Paint()
-      ..color = const Color(0xFFD4A96A).withValues(alpha: 0.8)
+      ..color = brandColor.withValues(alpha: 0.8)
       ..strokeWidth = 1.5;
     canvas.drawLine(
       Offset(left + 8, top + cutH / 2),
@@ -341,7 +344,8 @@ class _ScanOverlayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ScanOverlayPainter oldDelegate) =>
+      oldDelegate.brandColor != brandColor;
 }
 
 // ── Found result ──────────────────────────────────────────────────────────────
@@ -420,7 +424,7 @@ class _FoundResult extends StatelessWidget {
                       children: [
                         Text(
                           result.title,
-                          style: GoogleFonts.cormorantGaramond(
+                          style: GoogleFonts.figtree(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: c.text,
@@ -493,7 +497,7 @@ class _FoundResult extends StatelessWidget {
                 _AddButton(
                   icon: Icons.check_circle_rounded,
                   label: 'Already Read',
-                  color: Colors.green,
+                  color: c.success,
                   onTap: () => onAdd('completed'),
                 ),
               ] else
@@ -504,13 +508,13 @@ class _FoundResult extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.check_circle_rounded,
-                            color: Colors.green, size: 20),
+                            color: c.success, size: 20),
                         const SizedBox(width: 8),
                         Text('Added to library',
                             style: GoogleFonts.outfit(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.green)),
+                                color: c.success)),
                       ],
                     ),
                   ),
@@ -647,7 +651,7 @@ class _NotFoundResult extends StatelessWidget {
                           GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.brand,
-                    foregroundColor: Colors.white,
+                    foregroundColor: c.onPrimary,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -689,7 +693,7 @@ class _ErrorResult extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.error_outline_rounded, color: c.red, size: 48),
+                Icon(Icons.error_outline_rounded, color: c.error, size: 48),
                 const SizedBox(height: 16),
                 Text('Lookup failed',
                     style: GoogleFonts.outfit(
@@ -710,7 +714,7 @@ class _ErrorResult extends StatelessWidget {
                           GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.brand,
-                    foregroundColor: Colors.white,
+                    foregroundColor: c.onPrimary,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 14),
                     shape: RoundedRectangleBorder(

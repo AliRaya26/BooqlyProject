@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/theme/theme_extensions.dart';
 import 'package:booqly/services/calendar_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -77,11 +77,12 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: c.surface,
       title: Text(
         'Link Google Calendar',
-        style: GoogleFonts.outfit(color: AppColors.text),
+        style: GoogleFonts.outfit(color: c.text),
       ),
       content: SizedBox(
         width: 320,
@@ -95,7 +96,7 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 height: 1.45,
-                color: AppColors.textMuted,
+                color: c.textMuted,
               ),
             ),
             const SizedBox(height: 20),
@@ -105,27 +106,27 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
                 child: Center(child: web_button.buildGoogleSignInButton()),
               )
             else
-              const Text('Web only'),
+              Text('Web only', style: GoogleFonts.outfit(color: c.textSub)),
             if (_status != null) ...[
               const SizedBox(height: 16),
               Text(
                 _status!,
                 style: GoogleFonts.outfit(
                   fontSize: 12,
-                  color: AppColors.brand,
+                  color: c.brand,
                 ),
               ),
             ],
             if (_busy)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
                 child: Center(
                   child: SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.brand,
+                      color: c.brand,
                     ),
                   ),
                 ),
@@ -136,7 +137,7 @@ class _CalendarLinkWebDialogState extends State<CalendarLinkWebDialog> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context, false),
-          child: Text('Cancel', style: GoogleFonts.outfit()),
+          child: Text('Cancel', style: GoogleFonts.outfit(color: c.textSub)),
         ),
       ],
     );

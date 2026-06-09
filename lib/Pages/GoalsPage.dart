@@ -77,7 +77,7 @@ class _GoalsPageState extends State<GoalsPage> {
             backgroundColor: c.brand,
             content: Text(
               'Goals saved!',
-              style: GoogleFonts.outfit(color: Colors.white),
+              style: GoogleFonts.outfit(color: c.onPrimary),
             ),
           ),
         );
@@ -109,7 +109,7 @@ class _GoalsPageState extends State<GoalsPage> {
         ),
         title: Text(
           'Reading Goals',
-          style: GoogleFonts.cormorantGaramond(
+          style: GoogleFonts.figtree(
             fontSize: 22,
             fontWeight: FontWeight.w600,
             color: c.text,
@@ -208,7 +208,7 @@ class _GoalsPageState extends State<GoalsPage> {
                     onPressed: _saving ? null : _save,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: c.brand,
-                      foregroundColor: Colors.white,
+                      foregroundColor: c.onPrimary,
                       disabledBackgroundColor: c.brandMid,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -216,11 +216,11 @@ class _GoalsPageState extends State<GoalsPage> {
                       elevation: 0,
                     ),
                     child: _saving
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              color: Colors.white,
+                              color: c.onPrimary,
                               strokeWidth: 2,
                             ),
                           )
@@ -754,12 +754,12 @@ class _MotivationalQuote extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.brandSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.brandMid.withOpacity(0.5)),
+        border: Border.all(color: c.brandMid.withValues(alpha: 0.5)),
       ),
       child: Text(
         quote,
         textAlign: TextAlign.center,
-        style: GoogleFonts.cormorantGaramond(
+        style: GoogleFonts.figtree(
           fontSize: 16,
           fontStyle: FontStyle.italic,
           color: c.brand,

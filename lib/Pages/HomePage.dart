@@ -9,7 +9,7 @@ import 'package:booqly/Pages/GoalsPage.dart';
 import 'package:booqly/Pages/LibraryPage.dart';
 import 'package:booqly/services/goals_service.dart';
 import 'package:booqly/models/reading_goal_model.dart';
-import 'package:booqly/Pages/SearchByTitlePage.dart' hide AppColors;
+import 'package:booqly/Pages/SearchByTitlePage.dart';
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:booqly/theme/app_colors.dart';
@@ -445,7 +445,7 @@ class _HomePageState extends State<HomePage> {
               onPressed: () => _showAddBottomSheet(context),
               backgroundColor: c.brand,
               elevation: 3,
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+              child: Icon(Icons.add_rounded, color: c.onPrimary, size: 28),
             )
           : null,
       body: Stack(
@@ -795,7 +795,7 @@ class _ContinueReadingCard extends StatelessWidget {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: isActive ? c.red : c.brand,
+                    backgroundColor: isActive ? c.error : c.brand,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14))),
@@ -804,7 +804,7 @@ class _ContinueReadingCard extends StatelessWidget {
                   children: [
                     Icon(
                       isActive ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                      color: Colors.white, size: 20,
+                      color: c.onPrimary, size: 20,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -814,7 +814,7 @@ class _ContinueReadingCard extends StatelessWidget {
                       style: GoogleFonts.outfit(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: c.onPrimary,
                           fontFeatures: isActive
                               ? const [FontFeature.tabularFigures()]
                               : null),
@@ -1074,7 +1074,7 @@ class _DayDot extends StatelessWidget {
       case DayStatus.done:
         bg = c.brand;
         border = null;
-        inner = const Icon(Icons.check, size: 14, color: Colors.white);
+        inner = Icon(Icons.check, size: 14, color: c.onPrimary);
       case DayStatus.today:
         bg = Colors.transparent;
         border = Border.all(color: c.brand, width: 2);
@@ -1582,7 +1582,7 @@ class _MonthlyStatsSectionState extends State<_MonthlyStatsSection> {
       children: [
         Text(
           value,
-          style: GoogleFonts.cormorantGaramond(
+          style: GoogleFonts.figtree(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: c.brand,
@@ -1677,7 +1677,7 @@ class _Bar extends StatelessWidget {
                             style: GoogleFonts.outfit(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: c.onPrimary,
                             ),
                           ),
                         ),
@@ -1739,8 +1739,8 @@ class _BottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         border: Border(top: BorderSide(color: c.border)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, -2)),
+        boxShadow: [
+          BoxShadow(color: c.shadow, blurRadius: 12, offset: const Offset(0, -2)),
         ],
       ),
       child: Row(
