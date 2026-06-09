@@ -137,8 +137,14 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
     }
 
     try {
-      final bookRef = FirebaseFirestore.instance.collection('books').doc();
-      final bookId  = bookRef.id;
+      // Generate a unique ID from the user's library subcollection
+      // (manual books are private — never written to the global /books catalog)
+      final libraryRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('library')
+          .doc();
+      final bookId = libraryRef.id;
 
       // ── Save cover locally ──
       String localCoverPath = '';
@@ -161,33 +167,8 @@ class _ManualEntryPageState extends State<ManualEntryPage> {
       final description = _descriptionCtrl.text.trim();
       final publishedAt = '$_pubDay ${_months[_pubMonth - 1]} $_pubYear';
 
-      // ── Write to global catalog ──
-      await bookRef.set({
-        'title':       title,
-        'author':      author,
-        'translator':  _translatorCtrl.text.trim(),
-        'narrator':    _narratorCtrl.text.trim(),
-        'publisher':   _publisherCtrl.text.trim(),
-        'description': description,
-        'language':    _language,
-        'category':    _category,
-        'totalPages':  totalPages,
-        'coverUrl':    localCoverPath,
-        'pdfUrl':      localPdfPath,
-        'isLocal':     true,
-        'publishedAt': publishedAt,
-        'addedBy':     user.uid,
-        'source':      'manual',
-        'createdAt':   Timestamp.now(),
-      });
-
-      // ── Add to user library (include metadata for fallback lookups) ──
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('library')
-          .doc(bookId)
-          .set({
+      // ── Add to user library (all metadata stored here — no global catalog write) ──
+      await libraryRef.set({
             // reading progress
             'status':      'want_to_read',
             'currentPage': 0,
