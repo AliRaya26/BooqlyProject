@@ -14,45 +14,103 @@ import 'firebase_options.dart';
 
 final ReadingMotivationService motivationService = ReadingMotivationService();
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
+
   try {
-    await dotenv.load(fileName: 'assets/config.env');
-  } catch (_) {
-    // Key can also be passed via --dart-define=GEMINI_API_KEY=...
+    try {
+      await dotenv.load(fileName: 'assets/config.env');
+    } catch (_) {
+      // Key can also be passed via --dart-define=GEMINI_API_KEY=...
+    }
+
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    if (kIsWeb) {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    }
+
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+
+    // Do not block first paint on Google Fonts network downloads.
+    GoogleFonts.config.allowRuntimeFetching = true;
+    try {
+      await GoogleFonts.pendingFonts([
+        GoogleFonts.outfit(),
+        GoogleFonts.figtree(),
+        GoogleFonts.merriweather(),
+      ]).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('GoogleFonts.pendingFonts skipped: $e');
+    }
+
+    await GeminiChatService.loadSavedApiKey();
+    await ThemeService.instance.load();
+
+    try {
+      await motivationService.initialize();
+      bindMotivationService(motivationService);
+    } catch (e, stack) {
+      debugPrint('ReadingMotivationService.initialize failed: $e\n$stack');
+    }
+
+    runApp(const MyApp());
+  } catch (e, stack) {
+    debugPrint('Booqly startup failed: $e\n$stack');
+    runApp(StartupErrorApp(message: e.toString()));
   }
+}
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+/// Shown when [main] fails so the web page is not a blank white screen.
+class StartupErrorApp extends StatelessWidget {
+  const StartupErrorApp({super.key, required this.message});
 
-  if (kIsWeb) {
-    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF8F7F4),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Booqly could not start',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  style: const TextStyle(fontSize: 14, height: 1.5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Try: stop the app, run flutter pub get, then flutter run -d chrome.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6C6479)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
-
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-  );
-
-  // Avoid first-frame stalls on tablet when fonts download.
-  GoogleFonts.config.allowRuntimeFetching = true;
-  await GoogleFonts.pendingFonts([
-    GoogleFonts.outfit(),
-    GoogleFonts.figtree(),
-    GoogleFonts.merriweather(),
-  ]);
-
-  // Restore any API key the user saved in-app (must be before runApp).
-  await GeminiChatService.loadSavedApiKey();
-
-  // Restore persisted theme mode.
-  await ThemeService.instance.load();
-
-  await motivationService.initialize();
-  bindMotivationService(motivationService);
-
-  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {

@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:booqly/Pages/BookDetailPage.dart';
 import 'package:booqly/services/reading_session_service.dart';
 import 'package:booqly/theme/app_colors.dart';
-import 'package:flutter/foundation.dart';
+import 'package:booqly/utils/book_cover_url.dart';
+import 'package:booqly/widgets/book_cover.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,33 +10,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:booqly/services/preferences_service.dart';
-
-// ── Book cover helper ─────────────────────────────────────────────────────────
-
-class BookCover extends StatelessWidget {
-  final String url;
-  const BookCover({super.key, required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    if (url.trim().isEmpty) {
-      return _placeholder(c);
-    }
-    if (url.startsWith('http')) {
-      return Image.network(url, fit: BoxFit.cover,
-          errorBuilder: (ctx, e, s) => _placeholder(c));
-    }
-    if (kIsWeb) return _placeholder(c);
-    return Image.file(File(url), fit: BoxFit.cover,
-        errorBuilder: (ctx, e, s) => _placeholder(c));
-  }
-
-  Widget _placeholder(AppPalette c) => Container(
-        color: c.surfaceAlt,
-        child: Center(child: Icon(Icons.menu_book_rounded, color: c.textMuted, size: 28)),
-      );
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -100,29 +72,69 @@ class _LibraryPageState extends State<LibraryPage>
       List<BookModel> reading = [], want = [], completed = [];
 
       for (final doc in snapshot.docs) {
-        final data = doc.data();
+        final libraryData = doc.data();
         final bookDoc =
             await _firestore.collection('books').doc(doc.id).get();
-        if (!bookDoc.exists) continue;
-        final bd = bookDoc.data()!;
+        final catalogData =
+            bookDoc.exists ? bookDoc.data()! : <String, dynamic>{};
+
+        // Prefer catalog; fall back to library doc; use doc id as title last resort.
+        var title = (catalogData['title'] ?? libraryData['title'] ?? doc.id)
+            .toString()
+            .trim();
+        if (title.isEmpty) continue;
+
+        final coverFromCatalog = coverUrlFromMap(catalogData);
+        final coverFromLibrary = coverUrlFromMap(libraryData);
+        final storedCover =
+            coverFromCatalog.isNotEmpty ? coverFromCatalog : coverFromLibrary;
+        final isbn =
+            (catalogData['isbn'] ?? libraryData['isbn'] ?? '').toString();
+
         final book = BookModel(
-          id: bookDoc.id,
-          title: bd['title'] ?? '',
-          author: bd['author'] ?? '',
-          description: bd['description'] ?? '',
-          category: bd['category'] ?? '',
-          coverUrl: bd['coverUrl'] ?? '',
-          pdfUrl: bd['pdfUrl'] ?? '',
-          totalPages: bd['totalPages'] ?? 0,
-          progress: (data['progress'] ?? 0).toDouble(),
+          id: doc.id,
+          title: title,
+          author: (catalogData['author'] ?? libraryData['author'] ?? '')
+              .toString(),
+          description:
+              (catalogData['description'] ?? libraryData['description'] ?? '')
+                  .toString(),
+          category:
+              (catalogData['category'] ?? libraryData['category'] ?? '')
+                  .toString(),
+          coverUrl: effectiveCoverUrl(
+            coverUrl: storedCover,
+            title: title,
+            isbn: isbn.isNotEmpty ? isbn : null,
+          ),
+          pdfUrl: (catalogData['pdfUrl'] ?? libraryData['pdfUrl'] ?? '')
+              .toString(),
+          totalPages: (catalogData['totalPages'] as num?)?.toInt() ??
+              (libraryData['totalPages'] as num?)?.toInt() ??
+              0,
+          progress: (libraryData['progress'] ?? 0).toDouble(),
+          currentPage: (libraryData['currentPage'] as num?)?.toInt() ?? 0,
         );
-        switch (data['status'] as String? ?? '') {
+        switch (libraryData['status'] as String? ?? '') {
           case 'reading':
             reading.add(book);
           case 'want_to_read':
             want.add(book);
           case 'completed':
             completed.add(book);
+        }
+
+        // Backfill missing display fields on library docs (older entries).
+        if (coverFromLibrary.isEmpty && book.coverUrl.isNotEmpty) {
+          doc.reference.set(
+            LibraryService.bookMetadata(
+              title: book.title,
+              author: book.author,
+              coverUrl: book.coverUrl,
+              category: book.category,
+            ),
+            SetOptions(merge: true),
+          );
         }
       }
 
@@ -159,7 +171,17 @@ class _LibraryPageState extends State<LibraryPage>
 
   Future<void> _addSuggested(BookModel book) async {
     await _libraryService.addBook(
-        bookId: book.id, status: 'want_to_read', totalPages: book.totalPages);
+      bookId: book.id,
+      status: 'want_to_read',
+      totalPages: book.totalPages,
+      title: book.title,
+      author: book.author,
+      coverUrl: effectiveCoverUrl(
+        coverUrl: book.coverUrl,
+        title: book.title,
+      ),
+      category: book.category,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -364,7 +386,7 @@ class _LibraryPageState extends State<LibraryPage>
                                   crossAxisCount: 3,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 16,
-                                  childAspectRatio: 0.52,
+                                  childAspectRatio: 0.38,
                                 ),
                               ),
                             ),
@@ -495,12 +517,15 @@ class _SuggestCard extends StatelessWidget {
       child: SizedBox(
         width: 96,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
+          AspectRatio(
+            aspectRatio: 0.68,
             child: Stack(children: [
               Positioned.fill(
-                child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: BookCover(url: book.coverUrl)),
+                child: BookCoverImage(
+                  url: book.coverUrl,
+                  title: book.title,
+                  fillParent: true,
+                ),
               ),
               Positioned(
                 bottom: 6,
@@ -554,13 +579,17 @@ class _BookTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+        AspectRatio(
+          aspectRatio: 0.68,
           child: Stack(children: [
             Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: BookCover(url: book.coverUrl),
+              child: BookCoverImage(
+                url: book.coverUrl,
+                title: book.title,
+                fillParent: true,
               ),
             ),
             // Favourite indicator
@@ -674,7 +703,7 @@ class _BookTile extends StatelessWidget {
               ),
           ]),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 6),
         if (showProgress) ...[
           Row(children: [
             Expanded(

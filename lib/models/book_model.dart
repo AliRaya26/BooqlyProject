@@ -1,3 +1,5 @@
+import 'package:booqly/utils/book_cover_url.dart';
+
 class BookModel {
   final String id;
   final String title;
@@ -28,13 +30,19 @@ class BookModel {
     Map<String, dynamic> map,
     String documentId,
   ) {
+    final title = (map['title'] ?? documentId).toString();
+    final isbn = (map['isbn'] ?? '').toString();
     return BookModel(
       id: documentId,
-      title: map['title'] ?? '',
+      title: title,
       author: map['author'] ?? '',
       description: map['description'] ?? '',
       category: map['category'] ?? '',
-      coverUrl: map['coverUrl'] ?? '',
+      coverUrl: effectiveCoverUrl(
+        coverUrl: coverUrlFromMap(map),
+        title: title,
+        isbn: isbn.isNotEmpty ? isbn : null,
+      ),
       pdfUrl: map['pdfUrl'] ?? '',
       totalPages: map['totalPages'] ?? 0,
 

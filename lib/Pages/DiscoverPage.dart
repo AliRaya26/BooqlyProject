@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:booqly/models/book_model.dart';
 import 'package:booqly/services/book_service.dart';
 import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/widgets/book_cover.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -356,23 +357,10 @@ class _BookCard extends StatelessWidget {
   }
 
   Widget _cover(AppPalette c) {
-    if (book.coverUrl.trim().isEmpty) return _placeholder(c);
-    if (book.coverUrl.startsWith('http')) {
-      return Image.network(
-        book.coverUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        errorBuilder: (ctx, err, stack) => _placeholder(c),
-      );
-    }
-    if (kIsWeb) return _placeholder(c);
-    return Image.file(
-      File(book.coverUrl),
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      errorBuilder: (ctx, err, stack) => _placeholder(c),
+    return BookCoverImage(
+      url: book.coverUrl,
+      title: book.title,
+      fillParent: true,
     );
   }
 

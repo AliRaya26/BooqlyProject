@@ -38,23 +38,23 @@ class PushNotificationService {
         badge: true,
         sound: true,
       );
+
+      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const ios = DarwinInitializationSettings();
+      await _notifications.initialize(
+        const InitializationSettings(android: android, iOS: ios),
+      );
+
+      const channel = AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: 'Reminders to read during free time on your calendar',
+        importance: Importance.defaultImportance,
+      );
+      final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(channel);
     }
-
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios = DarwinInitializationSettings();
-    await _notifications.initialize(
-      const InitializationSettings(android: android, iOS: ios),
-    );
-
-    const channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: 'Reminders to read during free time on your calendar',
-      importance: Importance.defaultImportance,
-    );
-    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(channel);
 
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
 

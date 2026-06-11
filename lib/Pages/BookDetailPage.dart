@@ -12,6 +12,7 @@ import 'package:booqly/services/email_service.dart';
 import 'package:booqly/services/library_service.dart';
 import 'package:booqly/Pages/BookNotesPage.dart';
 import 'package:booqly/services/reading_session_service.dart';
+import 'package:booqly/utils/book_cover_url.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -25,6 +26,11 @@ class BookDetailPage extends StatefulWidget {
 }
 
 class _BookDetailPageState extends State<BookDetailPage> {
+  String get _libraryCoverUrl => effectiveCoverUrl(
+        coverUrl: widget.book.coverUrl,
+        title: widget.book.title,
+      );
+
   final LibraryService _libraryService = LibraryService();
   final FeedbackService _feedbackService = FeedbackService();
   final EmailService _emailService = EmailService();
@@ -124,6 +130,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
           "currentPage": _currentPage,
           "totalPages": widget.book.totalPages,
           "addedAt": Timestamp.now(),
+          ...LibraryService.bookMetadata(
+            title: widget.book.title,
+            author: widget.book.author,
+            coverUrl: _libraryCoverUrl,
+            category: widget.book.category,
+          ),
         }, SetOptions(merge: true));
   }
 
@@ -220,6 +232,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
           "currentPage": widget.book.totalPages,
           "totalPages": widget.book.totalPages,
           "completedAt": Timestamp.now(),
+          ...LibraryService.bookMetadata(
+            title: widget.book.title,
+            author: widget.book.author,
+            coverUrl: _libraryCoverUrl,
+            category: widget.book.category,
+          ),
         }, SetOptions(merge: true));
 
     final emailFuture = _sendBookCompletedEmail(user);
@@ -788,6 +806,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                             "totalPages":
                                                 widget.book.totalPages,
                                             "addedAt": Timestamp.now(),
+                                            ...LibraryService.bookMetadata(
+                                              title: widget.book.title,
+                                              author: widget.book.author,
+                                              coverUrl: _libraryCoverUrl,
+                                              category: widget.book.category,
+                                            ),
                                           }, SetOptions(merge: true));
                                           if (!ctx.mounted) return;
                                           setState(
@@ -914,6 +938,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                   bookId: widget.book.id,
                                   status: "want_to_read",
                                   totalPages: widget.book.totalPages,
+                                  title: widget.book.title,
+                                  author: widget.book.author,
+                                  coverUrl: _libraryCoverUrl,
+                                  category: widget.book.category,
                                 );
                                 if (!context.mounted) return;
                                 setState(() => _bookStatus = "want_to_read");
@@ -1060,6 +1088,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     "status": "reading",
                                     "progress": 0,
                                     "currentPage": 0,
+                                    ...LibraryService.bookMetadata(
+                                      title: widget.book.title,
+                                      author: widget.book.author,
+                                      coverUrl: _libraryCoverUrl,
+                                      category: widget.book.category,
+                                    ),
                                   }, SetOptions(merge: true));
 
                               setState(() {

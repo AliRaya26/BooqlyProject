@@ -218,6 +218,10 @@ class _ReadingPreferencesPageState extends State<ReadingPreferencesPage> {
           bookId: _firstBookPicked!.id,
           status: 'want_to_read',
           totalPages: _firstBookPicked!.totalPages,
+          title: _firstBookPicked!.title,
+          author: _firstBookPicked!.author,
+          coverUrl: _firstBookPicked!.coverUrl,
+          category: _firstBookPicked!.category,
         );
       } catch (_) {}
       setState(() => _addingBook = false);

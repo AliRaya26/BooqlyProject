@@ -13,6 +13,7 @@ import 'package:booqly/Pages/SearchByTitlePage.dart';
 import 'package:booqly/Pages/SettingsPage.dart';
 import 'package:booqly/Pages/pdf_reader_page.dart';
 import 'package:booqly/theme/app_colors.dart';
+import 'package:booqly/widgets/book_cover.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -29,64 +30,25 @@ import 'dart:async';
 
 class BookCover extends StatelessWidget {
   final String url;
+  final String? title;
   final double width;
   final double height;
 
   const BookCover({
     super.key,
     required this.url,
+    this.title,
     this.width = 100,
     this.height = 150,
   });
 
   @override
   Widget build(BuildContext context) {
-    Widget child;
-
-    final c = AppColors.of(context);
-    if (url.trim().isEmpty) {
-      child = Container(
-        color: c.surfaceAlt,
-        child: Icon(Icons.menu_book_rounded, color: c.textMuted),
-      );
-    } else if (url.startsWith('http')) {
-      child = Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
-          color: c.surfaceAlt,
-          child: Icon(Icons.broken_image, color: c.textMuted),
-        ),
-      );
-    } else if (kIsWeb) {
-      child = Container(
-        color: c.surfaceAlt,
-        child: Center(
-          child: Icon(Icons.image_not_supported_rounded, color: c.textMuted),
-        ),
-      );
-    } else {
-      child = Image.file(
-        File(url),
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Container(
-          color: c.surfaceAlt,
-          child: Icon(Icons.broken_image, color: c.textMuted),
-        ),
-      );
-    }
-
-    return SizedBox(
+    return BookCoverImage(
+      url: url,
+      title: title,
       width: width,
       height: height,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: FittedBox(
-          fit: BoxFit.cover,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(width: width, height: height, child: child),
-        ),
-      ),
     );
   }
 }
@@ -728,7 +690,8 @@ class _ContinueReadingCard extends StatelessWidget {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           GestureDetector(
               onTap: () => _openDetail(context),
-              child: BookCover(url: book.coverUrl, width: 64, height: 92)),
+              child: BookCover(
+                  url: book.coverUrl, title: book.title, width: 64, height: 92)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1149,7 +1112,11 @@ class _WantToReadSection extends StatelessWidget {
               child: SizedBox(
                 width: 86,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  BookCover(url: book.coverUrl, width: 86, height: 120),
+                  BookCover(
+                      url: book.coverUrl,
+                      title: book.title,
+                      width: 86,
+                      height: 120),
                   const SizedBox(height: 8),
                   Text(book.title,
                       maxLines: 2,
